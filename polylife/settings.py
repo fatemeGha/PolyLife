@@ -116,3 +116,7 @@ JWT_SECRET = env("JWT_SECRET", default=SECRET_KEY)
 JWT_ALGORITHM = "HS256"
 JWT_ACCESS_TTL_SECONDS = env.int("JWT_ACCESS_TTL_SECONDS", default=15 * 60)  # 15 minutes
 JWT_REFRESH_TTL_SECONDS = env.int("JWT_REFRESH_TTL_SECONDS", default=7 * 24 * 60 * 60)  # 7 days
+
+# Auth cookies. In production set JWT_COOKIE_SECURE=True (HTTPS only).
+JWT_COOKIE_SECURE = env.bool("JWT_COOKIE_SECURE", default=False)
+JWT_COOKIE_SAMESITE = env("JWT_COOKIE_SAMESITE", default="Lax")
