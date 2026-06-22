@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PolyLife Core</title>
+    <style>
+        body {
+            font-family: Tahoma, "Segoe UI", sans-serif;
+            background: linear-gradient(135deg, #1A4F54 0%, #6BA5AA 60%, #C8E8EB 100%);
+            color: #094B50;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card {
+            background: rgba(250, 238, 219, 0.92);
+            padding: 2.5rem 3rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            max-width: 560px;
+            line-height: 1.9;
+        }
+        h1 { margin-top: 0; letter-spacing: 0.05em; }
+        code {
+            background: #145156;
+            color: #FAEEDB;
+            padding: 0.15rem 0.5rem;
+            border-radius: 0.4rem;
+            direction: ltr;
+            display: inline-block;
+        }
+        a { color: #185E64; }
+        .ok { color: #1A7F37; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>PolyLife — هسته فعال است ✅</h1>
+        <p>API هسته در حال اجراست، اما <b>فرانت‌اند هنوز build نشده</b> است؛
+           برای همین این صفحه‌ی موقت نمایش داده می‌شود.</p>
+        <p>برای دیدن صفحه‌ی اصلی React، پروژه را با Docker اجرا کن
+           (فرانت‌اند داخل Docker به‌صورت خودکار build می‌شود):</p>
+        <p><code>docker compose up --build</code></p>
+        <p>سلامت هسته: <a href="/api/health/">/api/health/</a> ·
+           پنل ادمین: <a href="/admin/">/admin/</a></p>
+    </div>
+</body>
+</html>

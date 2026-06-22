@@ -1,0 +1,12 @@
+services:
+  core:
+    build: .
+    container_name: polylife-core
+    ports:
+      - "8000:8000"
+    environment:
+      DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
+      DJANGO_SECRET_KEY: "dev-only-insecure-secret-key-change-me-in-production"
+      JWT_SECRET: "dev-only-insecure-jwt-secret-change-me-in-production"
+    restart: unless-stopped
