@@ -1,6 +1,5 @@
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import render
 
 # Shown in the sidebar before any real team microservice exists, so the UI is
 # never empty during early development.
@@ -38,10 +37,14 @@ def home(request):
 
     Acts as the catch-all for client-side routes too (e.g. /login, /register):
     if the SPA is built, its index.html is returned and the React router takes
-    over. If it is not built (local run without Docker), a fallback page with
-    build instructions is shown instead.
+    over. If it is not built (local run without Docker), a minimal placeholder
+    is returned instead.
     """
     index_file = settings.FRONTEND_DIST / "index.html"
     if index_file.exists():
         return HttpResponse(index_file.read_bytes())
-    return render(request, "core/frontend_not_built.html", status=200)
+    return HttpResponse(
+        "<h1>PolyLife core</h1>"
+        "<p>API is running. Build the frontend with Docker to see the home page.</p>",
+        content_type="text/html; charset=utf-8",
+    )

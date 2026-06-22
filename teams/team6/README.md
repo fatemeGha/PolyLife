@@ -4,7 +4,7 @@ Your team's workspace. It's a Django app skeleton plus everything needed to run
 behind the shared gateway. Build it up step by step.
 
 ## Start (you barely touch Docker)
-1. Make sure the **core** is running (ask your TA, or run `scripts/start-core.ps1`).
+1. Make sure the **core** is running (ask your TA, or run `scripts/windows/start-core.ps1`).
 2. In this folder run:  **`.\run.ps1`**  (Windows) or **`./run.sh`** (mac/Linux)
    - it creates `.env` from `.env.example` and starts your stack.
 3. Open **http://localhost:9106**

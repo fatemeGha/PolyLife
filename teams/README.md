@@ -40,11 +40,9 @@ Passwords are **not** in `docker-compose.yml` — they come from each team's
 
 ## Running
 
-1. Start the core (repo root): `.\run.ps1` (or `scripts\start-core.ps1`).
-2. Start a team: `scripts\start-team.ps1 1`  — or `cd teams\team1 && .\run.ps1`.
+1. Start the core (repo root): `scripts\windows\start-core.ps1`.
+2. Start a team: `scripts\windows\start-team.ps1 1`  — or `cd teams\team1 && .\run.ps1`.
 3. Open the team URL above.
 
-## Regenerating
-
-Edit `teams/_template/`, then run `scripts/generate_teams.ps1` to rebuild all
-eight team folders (each gets its own port and simple password).
+> `teams/_template/` is the reference each team folder was created from. Edit a
+> team folder directly to work on that team.

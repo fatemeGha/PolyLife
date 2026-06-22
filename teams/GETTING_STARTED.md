@@ -8,13 +8,13 @@ script starts everything.
 2. Get the project and make sure the **core** is up. Usually your TA runs it; to
    run it yourself, from the repo root:
    ```
-   .\run.ps1            # Windows      (or)      ./run.sh
+   scripts\windows\start-core.ps1     # Windows   (or)   scripts/bash/start-core.sh
    ```
    The core is now at http://localhost:8000 (sign up / log in there).
 3. Start your team (say team3). From the repo root:
    ```
-   scripts\start-team.ps1 3       # Windows
-   scripts/start-team.sh 3        # mac/Linux
+   scripts\windows\start-team.ps1 3     # Windows
+   scripts/bash/start-team.sh 3         # mac/Linux
    ```
    …or `cd teams/team3` and run `.\run.ps1`.
 4. Open your team URL, e.g. **http://localhost:9103**.
