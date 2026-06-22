@@ -51,16 +51,13 @@ def resolve_user(request):
 
 
 def api_login_required(view_func):
-    """Require a valid access token. Works with or without the JWT middleware."""
+    """Require an authenticated user (populated by JWTAuthenticationMiddleware)."""
 
     @wraps(view_func)
     def _wrapped(request, *args, **kwargs):
         user = getattr(request, "user", None)
         if user is None or not user.is_authenticated:
-            user = resolve_user(request)
-            if user is None:
-                return JsonResponse({"detail": "Authentication required"}, status=401)
-            request.user = user
+            return JsonResponse({"detail": "Authentication required"}, status=401)
         return view_func(request, *args, **kwargs)
 
     return _wrapped
