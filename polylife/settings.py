@@ -104,3 +104,6 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Custom user model (email-based), shared by the core and all team apps.
+AUTH_USER_MODEL = "core.User"
