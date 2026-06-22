@@ -2,16 +2,18 @@
 Authentication API endpoints.
 
 Contract (consumed by the home-page frontend):
-  POST /api/register  {username, phone, password}  -> 201 {success, message, user}
-  POST /api/login     {username, password}         -> 200 {success, message, token, user}
-  GET  /api/user      (Bearer token)               -> 200 {success, user}
-  POST /api/logout    (Bearer token)               -> 200 {success, message}
+  POST /api/register  {username, password}  -> 201 {success, message, user}
+  POST /api/login     {username, password}  -> 200 {success, message, token, user}
+  GET  /api/user      (Bearer token)        -> 200 {success, user}
+  POST /api/logout    (Bearer token)        -> 200 {success, message}
+  GET  /api/verify    (Bearer / cookie)     -> 200 + X-User-* headers (forward-auth)
 
 All errors share the shape {success: false, message: "..."}.
 These views are CSRF-exempt because they are token-authenticated APIs.
 """
 
 import json
+from urllib.parse import quote
 
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
@@ -118,3 +120,21 @@ def logout(request):
     request.user.token_version += 1
     request.user.save(update_fields=["token_version"])
     return JsonResponse({"success": True, "message": "خروج با موفقیت انجام شد"})
+
+
+@require_GET
+@api_login_required
+def verify(request):
+    """
+    Forward-auth endpoint for team gateways.
+
+    A team's nginx gateway calls this (via `auth_request`) for every protected
+    request. A 200 means "allowed"; the identity is returned in headers the
+    gateway forwards to the team backend. A 401 means "denied".
+
+    The username is URL-encoded so the header stays ASCII-safe.
+    """
+    resp = JsonResponse({"success": True})
+    resp["X-User-Id"] = str(request.user.id)
+    resp["X-User-Username"] = quote(request.user.username)
+    return resp

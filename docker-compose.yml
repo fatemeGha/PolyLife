@@ -6,7 +6,15 @@ services:
       - "8000:8000"
     environment:
       DEBUG: "False"
-      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,core"
       DJANGO_SECRET_KEY: "dev-only-insecure-secret-key-change-me-in-production"
       JWT_SECRET: "dev-only-insecure-jwt-secret-change-me-in-production"
+    networks:
+      - polylife
     restart: unless-stopped
+
+# Shared network so each team's gateway can reach the core by name (core:8000).
+# Team stacks join this same network as `external`.
+networks:
+  polylife:
+    name: polylife_net

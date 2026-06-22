@@ -1,0 +1,46 @@
+# Team team4 — microservice stack.  Run from this folder:  docker compose up --build
+#
+# Prerequisite: the PolyLife core must already be running (it owns the shared
+# `polylife_net` network that the gateway uses to reach the core).
+#
+# Three containers:
+#   db      -> this team's OWN database (isolated, with its own password)
+#   app     -> this team's service (frontend + backend together) on port 8000
+#   gateway -> nginx; authenticates every /api/ request against the core,
+#              then proxies to the app.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: team4
+      POSTGRES_USER: team4_user
+      POSTGRES_PASSWORD: "plf_team4_Z2h6Bn"   # <-- this team's unique DB password (dev only)
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks: [team]
+
+  app:
+    build: ./app
+    environment:
+      # Your service talks to its OWN database with these credentials.
+      DATABASE_URL: "postgres://team4_user:plf_team4_Z2h6Bn@db:5432/team4"
+    depends_on: [db]
+    networks: [team]
+
+  gateway:
+    image: nginx:alpine
+    ports:
+      - "9104:80"          # open in the browser:  http://localhost:9104
+    volumes:
+      - ./gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on: [app]
+    networks: [team, polylife]
+
+volumes:
+  db-data:
+
+networks:
+  team:                        # private: app <-> db only
+  polylife:                    # shared with the core: gateway <-> core
+    external: true
+    name: polylife_net
