@@ -1,0 +1,42 @@
+{% extends "team4/base.html" %}
+{% load static %}
+
+{% block content %}
+
+<h2>
+
+سوابق تمرین
+
+</h2>
+
+<table class="table">
+
+<thead>
+
+<tr>
+
+<th>برنامه</th>
+
+<th>وضعیت</th>
+
+<th>مدت</th>
+
+<th>عملیات</th>
+
+</tr>
+
+</thead>
+
+<tbody id="historyTable">
+
+</tbody>
+
+</table>
+
+{% endblock %}
+
+{% block scripts %}
+
+<script src="{% static 'team4/js/history.js' %}"></script>
+
+{% endblock %}

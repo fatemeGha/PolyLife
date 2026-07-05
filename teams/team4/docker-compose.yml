@@ -1,39 +1,61 @@
-# Team team4 — deployment.
-#
-# No passwords/keys live in this file. All config comes from `.env`
-# (the run script copies `.env.example` -> `.env` for you the first time).
-#
-# Out of the box only the gateway runs. Uncomment `backend` and `db` as you
-# build your service. Start with:   ./run.ps1   (Windows)   or   ./run.sh
 services:
+
   gateway:
     image: nginx:alpine
+
     ports:
-      - "${TEAM_PORT}:80"               # your team's unique port (from .env)
+      - "9104:80"
+
     volumes:
-      - ./gateway.conf:/etc/nginx/conf.d/default.conf:ro
-    environment:
-      - CORE_BASE_URL=${CORE_BASE_URL}  # from .env
-    networks: [polylife]
-    # depends_on: [backend]
+      - ./gateway.conf:/etc/nginx/conf.d/default.conf
+      - ./staticfiles:/app/staticfiles:ro
+      - ./media:/app/media:ro
 
-  # --- Your service (uncomment when ready) ---------------------------------
-  # backend:
-  #   build: .                          # builds this team's Django app
-  #   env_file: .env                    # DB creds & secret key come from .env
-  #   networks: [polylife, team]
-  #
-  # db:
-  #   image: postgres:16-alpine
-  #   env_file: .env                    # POSTGRES_DB/USER/PASSWORD from .env
-  #   volumes: [db-data:/var/lib/postgresql/data]
-  #   networks: [team]
+    depends_on:
+      - backend
 
-# volumes:
-#   db-data:
+    networks:
+      - polylife
+      - team
+
+  backend:
+    build: .
+
+    env_file:
+      - .env
+
+    depends_on:
+      - db
+
+    networks:
+      - polylife
+      - team
+    volumes:
+      - ./staticfiles:/app/staticfiles
+      - ./media:/app/media
+
+
+  db:
+    image: postgres:16-alpine
+
+    env_file:
+      - .env
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+    networks:
+      - team
+
+#    ports:
+#      - "5432:5432"
+
+volumes:
+  postgres-data:
 
 networks:
-  polylife:                             # shared with the core (gateway <-> core)
+  polylife:
     external: true
     name: polylife_net
-  # team:                               # private app <-> db (uncomment with db)
+
+  team:

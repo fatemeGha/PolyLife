@@ -1,0 +1,145 @@
+{% extends "team4/base.html" %}
+{% load static %}
+
+{% block title %}
+Dashboard
+{% endblock %}
+
+{% block content %}
+
+<h2 class="mb-4">
+
+داشبورد
+
+</h2>
+
+<div
+    id="login-alert"
+    class="alert alert-warning"
+    style="display:none">
+
+    برای استفاده از امکانات سامانه ابتدا وارد شوید.
+
+    <br><br>
+
+    <a
+        href="/login/"
+        class="btn btn-primary">
+
+        ورود
+
+    </a>
+
+</div>
+
+<div class="row g-4">
+
+    <div class="col-md-4">
+
+        <div class="card">
+
+            <div class="card-body text-center">
+
+                <h5>کاربر</h5>
+
+                <h3 id="user-name">
+
+                    --
+
+                </h3>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-4">
+
+        <div class="card">
+
+            <div class="card-body text-center">
+
+                <h5>تمرین‌ها</h5>
+
+                <h3 id="exercise-count">
+
+                    0
+
+                </h3>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-4">
+
+        <div class="card">
+
+            <div class="card-body text-center">
+
+                <h5>برنامه‌ها</h5>
+
+                <h3 id="program-count">
+
+                    0
+
+                </h3>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-6">
+
+        <div class="card">
+
+            <div class="card-body text-center">
+
+                <h5>علاقه‌مندی‌ها</h5>
+
+                <h3 id="favorite-count">
+
+                    0
+
+                </h3>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-md-6">
+
+        <div class="card">
+
+            <div class="card-body text-center">
+
+                <h5>سوابق</h5>
+
+                <h3 id="history-count">
+
+                    0
+
+                </h3>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+
+<script src="{% static 'team4/js/dashboard.js' %}"></script>
+
+{% endblock %}

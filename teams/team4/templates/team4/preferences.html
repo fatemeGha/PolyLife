@@ -1,0 +1,70 @@
+{% extends "team4/base.html" %}
+{% load static %}
+
+{% block title %}
+Preferences
+{% endblock %}
+
+{% block content %}
+
+<h2>تنظیمات کاربر</h2>
+
+<div class="card">
+
+<div class="card-body">
+
+<div class="mb-3">
+
+<label>هدف</label>
+
+<input
+id="goal"
+class="form-control">
+
+</div>
+
+<div class="mb-3">
+
+<label>سطح</label>
+
+<select
+id="level"
+class="form-select">
+
+<option value="beginner">Beginner</option>
+<option value="intermediate">Intermediate</option>
+<option value="advanced">Advanced</option>
+
+</select>
+
+</div>
+
+<div class="mb-3">
+
+<label>تجهیزات</label>
+
+<input
+id="equipment"
+class="form-control">
+
+</div>
+
+<button
+id="saveBtn"
+class="btn btn-success">
+
+ذخیره
+
+</button>
+
+</div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+
+<script src="{% static 'team4/js/preferences.js' %}"></script>
+
+{% endblock %}

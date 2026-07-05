@@ -1,0 +1,98 @@
+{% extends "team4/base.html" %}
+{% load static %}
+
+{% block content %}
+
+<h2 class="mb-4">
+گزارشات آماری
+</h2>
+
+<div class="row mb-4">
+
+    <div class="col-md-3">
+        <div class="card shadow">
+            <div class="card-body text-center">
+                <h5>تمرین‌ها</h5>
+                <h2 id="totalExercises">0</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card shadow">
+            <div class="card-body text-center">
+                <h5>برنامه‌ها</h5>
+                <h2 id="totalPrograms">0</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card shadow">
+            <div class="card-body text-center">
+                <h5>کاربران فعال</h5>
+                <h2 id="activeUsers">0</h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card shadow">
+            <div class="card-body text-center">
+                <h5>سوابق تمرین</h5>
+                <h2 id="totalHistory">0</h2>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="row">
+
+    <div class="col-lg-6 mb-4">
+
+        <div class="card shadow">
+
+            <div class="card-header">
+                آمار کلی
+            </div>
+
+            <div class="card-body">
+
+                <canvas id="summaryChart"></canvas>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-lg-6 mb-4">
+
+        <div class="card shadow">
+
+            <div class="card-header">
+                محبوب‌ترین برنامه‌ها
+            </div>
+
+            <div class="card-body">
+
+                <canvas id="workoutChart"></canvas>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script src="{% static 'team4/js/reports.js' %}"></script>
+
+{% endblock %}

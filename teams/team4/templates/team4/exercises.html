@@ -1,0 +1,117 @@
+{% extends "team4/base.html" %}
+{% load static %}
+
+{% block title %}
+Exercises
+{% endblock %}
+
+{% block content %}
+
+<h2 class="mb-4">
+
+بانک حرکات ورزشی
+
+</h2>
+
+<div class="card mb-4">
+
+<div class="card-body">
+
+<div class="row">
+
+<div class="col-md-3">
+
+<input
+id="search"
+class="form-control"
+placeholder="جستجو">
+
+</div>
+
+<div class="col-md-3">
+
+<select
+id="muscle"
+class="form-select">
+
+<option value="">
+
+همه عضلات
+
+</option>
+
+<option>Chest</option>
+<option>Back</option>
+<option>Leg</option>
+<option>Shoulder</option>
+<option>Arm</option>
+
+</select>
+
+</div>
+
+<div class="col-md-3">
+
+<select
+id="difficulty"
+class="form-select">
+
+<option value="">
+
+همه سطوح
+
+</option>
+
+<option>Beginner</option>
+
+<option>Intermediate</option>
+
+<option>Advanced</option>
+
+</select>
+
+</div>
+
+<div class="col-md-3">
+
+<input
+
+id="equipment"
+
+class="form-control"
+
+placeholder="Equipment">
+
+</div>
+
+</div>
+
+<div class="mt-3">
+
+<button
+class="btn btn-primary"
+id="filterBtn">
+
+جستجو
+
+</button>
+
+</div>
+
+</div>
+
+</div>
+
+<div
+id="exercise-list"
+class="row g-3">
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+
+<script src="{% static 'team4/js/exercises.js' %}"></script>
+
+{% endblock %}

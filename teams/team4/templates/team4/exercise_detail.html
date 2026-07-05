@@ -1,0 +1,24 @@
+{% extends "team4/base.html" %}
+{% load static %}
+
+{% block title %}
+Exercise
+{% endblock %}
+
+{% block content %}
+
+<div id="exercise-container"></div>
+
+{% endblock %}
+
+{% block scripts %}
+
+<script>
+
+const exerciseId={{ exercise_id }};
+
+</script>
+
+<script src="{% static 'team4/js/exercise_detail.js' %}"></script>
+
+{% endblock %}
