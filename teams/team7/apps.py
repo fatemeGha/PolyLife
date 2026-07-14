@@ -1,9 +1,12 @@
+import os
+import mongoengine
 from django.apps import AppConfig
 
 
 class TeamConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    # Import path of this app. `label` is the short name the core's database
-    # router uses to send this team's models to its OWN database.
     name = "teams.team7"
     label = "team7"
+
+    def ready(self):
+        mongoengine.connect(host=os.environ.get("DATABASE_URL"))
