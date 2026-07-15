@@ -23,6 +23,17 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
     volumes: [db-data:/data/db]
     networks: [team]
+  
+  redis:
+    image: redis:7-alpine
+    networks: [team]
+
+  celery-worker:
+    build: .
+    command: celery -A config worker --loglevel=info
+    env_file: .env
+    networks: [polylife, team]
+    depends_on: [redis, db]
 
 volumes:
   db-data:
