@@ -1,49 +1,91 @@
 """
-MODEL LAYER (continued)
+SERVICE LAYER
 Business logic that spans multiple collections or talks to external
 systems (Celery, Redis, Firebase). Controllers call these functions;
 these functions call models.py, never the other way around.
 """
 
-import os
+from __future__ import annotations
+
 import json
 import logging
-from datetime import datetime, timedelta
+import os
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from typing import Callable, Iterable, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .models import (
-    PhysicalRecord,
-    Goal,
-    WorkoutSession,
-    PersonalBest,
-    Reminder,
-    NotificationSettings,
-    Notification,
-    DeviceToken,
-    EventSubscription,
-)
+import mongoengine as me
+from dateutil.relativedelta import relativedelta
+
+try:  # Package execution: teams.team7.services
+    from .models import (
+        DeviceToken,
+        EventSubscription,
+        Goal,
+        Notification,
+        NotificationSettings,
+        PersonalBest,
+        PhysicalRecord,
+        Reminder,
+        WorkoutSession,
+        utc_now,
+    )
+except ImportError:  # Direct execution from inside teams/team7
+    from models import (  # type: ignore
+        DeviceToken,
+        EventSubscription,
+        Goal,
+        Notification,
+        NotificationSettings,
+        PersonalBest,
+        PhysicalRecord,
+        Reminder,
+        WorkoutSession,
+        utc_now,
+    )
 
 logger = logging.getLogger("team7")
+
+_UNSET = object()
+_ALLOWED_PERIODS = {"week": 7, "month": 30, "year": 365}
+_PHYSICAL_EDITABLE_FIELDS = {"weight", "height", "body_fat_percent", "muscle_mass"}
+_REMINDER_EDITABLE_FIELDS = {"title", "message", "channel", "repeat_type", "scheduled_time"}
+_SETTINGS_EDITABLE_FIELDS = {
+    "push_enabled",
+    "sms_enabled",
+    "email_enabled",
+    "dnd_start",
+    "dnd_end",
+    "timezone_name",
+}
+
+
+@dataclass(frozen=True)
+class PushSendResult:
+    """Describe the outcome of sending a push to all active device tokens."""
+
+    message_id: Optional[str]
+    sent_count: int
+    failed_count: int
 
 
 # ============================================================
 # Progress Tracking services
 # ============================================================
 
-def register_physical_data(user_id: str, weight: float, height: float,
-                            body_fat_percent: float = None, muscle_mass: float = None):
+
+def register_physical_data(
+    user_id: str,
+    weight: float,
+    height: float,
+    body_fat_percent: Optional[float] = None,
+    muscle_mass: Optional[float] = None,
+) -> PhysicalRecord:
     """
     UC01 main flow: validate input, create a PhysicalRecord, compute BMI,
-    save it, and return the saved record.
-    Raises ValueError on invalid input (caught by the controller, which
-    turns it into a validation-error response - UC01 exception flow).
+    save it, invalidate chart cache, and return the saved record.
     """
-    if weight is None or weight <= 0:
-        raise ValueError("weight must be a positive number")
-    if height is None or height <= 0:
-        raise ValueError("height must be a positive number")
-    if body_fat_percent is not None and not (0 <= body_fat_percent <= 100):
-        raise ValueError("body_fat_percent must be between 0 and 100")
-
     record = PhysicalRecord(
         user_id=user_id,
         weight=weight,
@@ -51,177 +93,190 @@ def register_physical_data(user_id: str, weight: float, height: float,
         body_fat_percent=body_fat_percent,
         muscle_mass=muscle_mass,
     )
-    record.calculate_bmi()  # sets record.bmi, does not save by itself
+    record.calculate_bmi()
     record.save()
-
-    # Invalidate any cached chart data for this user so the next chart
-    # request picks up the freshly-saved record instead of stale cache.
     _invalidate_chart_cache(user_id)
-
     return record
 
 
-def edit_physical_data(record_id: str, **fields):
+def edit_physical_data(record_id: str, **fields) -> PhysicalRecord:
     """
-    UC02: update an existing PhysicalRecord with the given fields
-    (any subset of weight / height / body_fat_percent / muscle_mass),
-    recompute BMI, and save. Raises PhysicalRecord.DoesNotExist if the
-    record_id is invalid or already soft-deleted.
+    UC02: update only editable PhysicalRecord fields, recompute BMI,
+    save the document, and invalidate the user's chart cache.
     """
-    record = PhysicalRecord.objects.get(record_id=record_id, is_deleted=False)
+    unknown_fields = set(fields) - _PHYSICAL_EDITABLE_FIELDS
+    if unknown_fields:
+        raise ValueError(f"unsupported physical-data fields: {sorted(unknown_fields)}")
 
-    for field_name, value in fields.items():
-        if value is not None and hasattr(record, field_name):
-            setattr(record, field_name, value)
+    record = PhysicalRecord.objects.get(record_id=record_id, is_deleted=False)
+    for field_name in _PHYSICAL_EDITABLE_FIELDS:
+        if field_name in fields:
+            setattr(record, field_name, fields[field_name])
 
     record.calculate_bmi()
-    record.updated_at = datetime.utcnow()
+    record.updated_at = utc_now()
     record.save()
-
     _invalidate_chart_cache(record.user_id)
     return record
 
 
-def delete_physical_data(record_id: str):
-    """UC02: soft-delete a PhysicalRecord (is_deleted = True, keep the row)."""
+def delete_physical_data(record_id: str) -> PhysicalRecord:
+    """UC02: soft-delete an active PhysicalRecord and invalidate its cache."""
     record = PhysicalRecord.objects.get(record_id=record_id, is_deleted=False)
     record.is_deleted = True
-    record.updated_at = datetime.utcnow()
+    record.updated_at = utc_now()
     record.save()
-
     _invalidate_chart_cache(record.user_id)
     return record
 
 
 def get_progress_chart_data(user_id: str, period: str) -> dict:
     """
-    UC03: build the time series needed to render progress charts for the
-    given period ('week' | 'month' | 'year'). Uses a Redis cache when
-    available, per the NFR that charts must render in under ~2 seconds.
-    Falls back transparently to a direct DB query if Redis isn't reachable
-    (e.g. during local dev before Redis is wired up).
+    UC03: return chronological progress-chart points for week/month/year.
+    Redis is used as a best-effort five-minute cache.
     """
+    if period not in _ALLOWED_PERIODS:
+        raise ValueError(f"period must be one of {tuple(_ALLOWED_PERIODS)}")
+
     cache_key = f"chart:{user_id}:{period}"
     cached = _redis_get(cache_key)
     if cached is not None:
-        return json.loads(cached)
+        try:
+            return json.loads(cached)
+        except (TypeError, UnicodeDecodeError, json.JSONDecodeError):
+            logger.warning("Discarding invalid chart cache value for %s", cache_key)
+            _redis_delete(cache_key)
 
-    period_days = {"week": 7, "month": 30, "year": 365}.get(period, 30)
-    since = datetime.utcnow() - timedelta(days=period_days)
-
-    records = (
-        PhysicalRecord.objects(
-            user_id=user_id,
-            is_deleted=False,
-            created_at__gte=since,
-        )
-        .order_by("created_at")
-    )
-
+    since = utc_now() - timedelta(days=_ALLOWED_PERIODS[period])
+    records = PhysicalRecord.objects(
+        user_id=user_id,
+        is_deleted=False,
+        created_at__gte=since,
+    ).order_by("created_at")
     goal = Goal.objects(user_id=user_id, is_deleted=False).first()
 
-    series = []
+    points = []
     for record in records:
         point = {
-            "date": record.created_at.isoformat(),
+            "date": _as_utc(record.created_at).isoformat(),
             "weight": record.weight,
             "bmi": record.bmi,
             "body_fat_percent": record.body_fat_percent,
         }
-        if goal:
+        if goal is not None:
             point["goal_comparison"] = record.compare_with_goal(goal)
-        series.append(point)
+        points.append(point)
 
-    result = {"period": period, "points": series}
-
-    # Cache for 5 minutes - short enough that new data shows up quickly,
-    # long enough to absorb repeated chart requests during one session.
+    result = {"period": period, "points": points}
     _redis_set(cache_key, json.dumps(result), ttl_seconds=300)
-
     return result
 
 
-def set_user_goal(user_id: str, target_weight: float = None, target_body_fat: float = None):
-    """UC04: create or update the user's single Goal document."""
+def set_user_goal(
+    user_id: str,
+    target_weight=_UNSET,
+    target_body_fat=_UNSET,
+    weight_goal_type=_UNSET,
+    weight_tolerance=_UNSET,
+) -> Goal:
+    """
+    UC04: create or update the user's active Goal.
+
+    Passing ``None`` explicitly clears an optional target; omitting a
+    parameter leaves its existing value unchanged.
+    """
     goal = Goal.objects(user_id=user_id, is_deleted=False).first()
     if goal is None:
         goal = Goal(user_id=user_id)
 
-    if target_weight is not None:
+    if target_weight is not _UNSET:
         goal.target_weight = target_weight
-    if target_body_fat is not None:
+    if target_body_fat is not _UNSET:
         goal.target_body_fat = target_body_fat
+    if weight_goal_type is not _UNSET:
+        goal.weight_goal_type = weight_goal_type
+    if weight_tolerance is not _UNSET:
+        goal.weight_tolerance = weight_tolerance
 
-    goal.updated_at = datetime.utcnow()
+    if goal.target_weight is None and goal.target_body_fat is None:
+        raise ValueError("at least one goal target must be configured")
+
+    goal.updated_at = utc_now()
     goal.save()
+    _invalidate_chart_cache(user_id)
     return goal
 
 
-def get_mentor_report(trainer_id: str, athlete_id: str) -> dict:
+def get_mentor_report(
+    trainer_id: str,
+    athlete_id: str,
+    authorization_checker: Optional[Callable[[str, str], bool]] = None,
+) -> dict:
     """
-    UC09: verify trainer_id has access to athlete_id, then build an
-    aggregated progress report for the trainer's dashboard.
+    UC09: authorize the trainer and build the athlete's monthly report.
 
-    NOTE: trainer-athlete assignment is managed by the Core service
-    (user roles/relationships), not by this microservice's own database.
-    _is_trainer_authorized() is a placeholder that should eventually call
-    Core's API to confirm the relationship - for now it always allows
-    the request, since the mentoring assignment model isn't defined yet.
+    Authorization fails closed until a real Core-service checker is supplied.
     """
-    if not _is_trainer_authorized(trainer_id, athlete_id):
+    checker = authorization_checker or _is_trainer_authorized
+    if not checker(trainer_id, athlete_id):
         raise PermissionError("trainer is not authorized to view this athlete's report")
 
-    chart_data = get_progress_chart_data(athlete_id, period="month")
-    personal_bests = PersonalBest.objects(user_id=athlete_id, is_deleted=False)
-
+    personal_bests = PersonalBest.objects(
+        user_id=athlete_id, is_deleted=False
+    ).order_by("exercise_name")
     return {
         "athlete_id": athlete_id,
-        "chart_data": chart_data,
+        "chart_data": get_progress_chart_data(athlete_id, period="month"),
         "personal_bests": [
             {
                 "exercise_name": pb.exercise_name,
                 "max_weight": pb.max_weight,
-                "achieved_date": pb.achieved_date.isoformat(),
+                "achieved_date": _as_utc(pb.achieved_date).isoformat(),
             }
             for pb in personal_bests
         ],
     }
 
 
-def detect_and_register_new_record(user_id: str, exercise_name: str,
-                                    weight_lifted: float, session_id: str):
+def detect_and_register_new_record(
+    user_id: str,
+    exercise_name: str,
+    weight_lifted: float,
+    session_id: str,
+    notification_sender: Optional[Callable[..., object]] = None,
+):
     """
-    UC11 main flow: after a WorkoutSession is saved, check whether
-    weight_lifted beats the user's current PersonalBest. If so, update
-    (or create) the PersonalBest and fire a congratulations Notification.
-    Returns the updated/created PersonalBest, or None if no record was broken.
+    UC11: atomically register a better PersonalBest and create a notification.
+    Returns None when the supplied weight does not improve the active record.
     """
-    if not PersonalBest.is_new_record(user_id, exercise_name, weight_lifted):
+    session = WorkoutSession.objects.get(
+        session_id=session_id,
+        user_id=user_id,
+        is_deleted=False,
+    )
+    normalized_exercise = " ".join(exercise_name.split())
+    if " ".join(session.exercise_name.split()) != normalized_exercise:
+        raise ValueError("exercise_name does not match the workout session")
+    if session.weight_lifted is not None and session.weight_lifted != weight_lifted:
+        raise ValueError("weight_lifted does not match the workout session")
+
+    personal_best, changed = PersonalBest.register_if_better(
+        user_id=user_id,
+        exercise_name=normalized_exercise,
+        weight_lifted=weight_lifted,
+        session_id=session_id,
+        achieved_date=session.session_date,
+    )
+    if not changed:
         return None
 
-    existing = PersonalBest.objects(
-        user_id=user_id, exercise_name=exercise_name, is_deleted=False
-    ).first()
-
-    if existing is None:
-        personal_best = PersonalBest.create_first_record(
-            user_id, exercise_name, weight_lifted, session_id
-        )
-    else:
-        personal_best = existing.update_record(weight_lifted, session_id)
-
-    # UC11 step 5-6: build + send the congratulations notification.
-    # Kept under 5 seconds per the NFR by doing this synchronously right
-    # after the DB write, without waiting on any slow external call here
-    # (send_push_notification itself is expected to be fire-and-forget).
     notification = Notification(
         user_id=user_id,
         type="record",
-        content=f"تبریک! رکورد جدید در {exercise_name}: {weight_lifted} کیلوگرم",
-    )
-    notification.save()
-    notification.send()
-
+        title="رکورد جدید",
+        content=f"تبریک! رکورد جدید در {normalized_exercise}: {weight_lifted} کیلوگرم",
+    ).save()
+    notification.send(sender=notification_sender or send_push_notification)
     return personal_best
 
 
@@ -229,41 +284,38 @@ def detect_and_register_new_record(user_id: str, exercise_name: str,
 # Reminder & Notification services
 # ============================================================
 
-def check_dnd_window(scheduled_time: datetime, settings: NotificationSettings) -> bool:
+
+def check_dnd_window(
+    scheduled_time: datetime,
+    settings: NotificationSettings,
+) -> bool:
     """
-    UC05 subflow: True if scheduled_time falls inside the user's DND
-    window (settings.dnd_start -> settings.dnd_end). This mirrors
-    Reminder.is_in_dnd_window() but works on a raw datetime, for use
-    before a Reminder document even exists yet.
+    UC05 subflow: check DND using the user's configured timezone.
+    The interval is start-inclusive and end-exclusive.
     """
-    # Build a throwaway Reminder just to reuse its DND-checking logic
-    # instead of duplicating the overnight-window math here.
-    probe = Reminder(
-        user_id="probe",
-        title="probe",
-        scheduled_time=scheduled_time,
-    )
+    local_time = _as_utc(scheduled_time).astimezone(_get_zone(settings.timezone_name))
+    probe = Reminder(user_id="probe", title="probe", scheduled_time=local_time)
     return probe.is_in_dnd_window(settings.dnd_start, settings.dnd_end)
 
 
-def create_reminder(user_id: str, title: str, message: str, channel: str,
-                     repeat_type: str, scheduled_time: datetime,
-                     confirm_dnd_override: bool = False) -> dict:
+def create_reminder(
+    user_id: str,
+    title: str,
+    message: Optional[str],
+    channel: str,
+    repeat_type: str,
+    scheduled_time: datetime,
+    confirm_dnd_override: bool = False,
+    task=None,
+) -> dict:
     """
-    UC05 main flow: validate DND, create+save a Reminder, and call
-    reminder.schedule() to enqueue the Celery task.
-
-    UC05 exception flow: if scheduled_time falls in the user's DND
-    window and confirm_dnd_override is False, no Reminder is created -
-    the caller (controller) gets back a warning so it can ask the user
-    to confirm or pick another time.
-
-    Returns:
-        {"status": "dnd_warning"}                    -> needs confirmation
-        {"status": "created", "reminder": Reminder}   -> saved + scheduled
+    UC05: validate DND, save a Reminder, and enqueue exactly one Celery task.
     """
+    scheduled_time = _as_utc(scheduled_time)
+    if scheduled_time <= utc_now():
+        raise ValueError("scheduled_time must be in the future")
+
     settings = NotificationSettings.get_or_create_default(user_id)
-
     if check_dnd_window(scheduled_time, settings) and not confirm_dnd_override:
         return {"status": "dnd_warning"}
 
@@ -275,216 +327,446 @@ def create_reminder(user_id: str, title: str, message: str, channel: str,
         repeat_type=repeat_type,
         scheduled_time=scheduled_time,
         status="created",
-    )
-    reminder.save()
-    reminder.schedule()  # moves status -> "scheduled" and enqueues the Celery task
-
+    ).save()
+    reminder.schedule(task=task or _get_process_due_task())
     return {"status": "created", "reminder": reminder}
 
 
-def edit_reminder(reminder_id: str, **fields):
-    """UC05: update an existing Reminder's editable fields and re-schedule it."""
+def edit_reminder(
+    reminder_id: str,
+    confirm_dnd_override: bool = False,
+    task=None,
+    revoke_task: Optional[Callable[[str], None]] = None,
+    **fields,
+) -> Reminder:
+    """
+    UC05: update editable fields, cancel the old task, and schedule one new task.
+    """
+    unknown_fields = set(fields) - _REMINDER_EDITABLE_FIELDS
+    if unknown_fields:
+        raise ValueError(f"unsupported reminder fields: {sorted(unknown_fields)}")
+
     reminder = Reminder.objects.get(reminder_id=reminder_id, is_deleted=False)
+    candidate_time = _as_utc(fields.get("scheduled_time", reminder.scheduled_time))
+    if candidate_time <= utc_now():
+        raise ValueError("scheduled_time must be in the future")
 
-    for field_name in ("title", "message", "channel", "repeat_type", "scheduled_time"):
-        if field_name in fields and fields[field_name] is not None:
-            setattr(reminder, field_name, fields[field_name])
+    settings = NotificationSettings.get_or_create_default(reminder.user_id)
+    if check_dnd_window(candidate_time, settings) and not confirm_dnd_override:
+        raise ValueError("scheduled_time falls inside the user's DND window")
 
-    reminder.updated_at = datetime.utcnow()
+    old_task_id = reminder.celery_task_id
+    for field_name in _REMINDER_EDITABLE_FIELDS:
+        if field_name in fields:
+            value = candidate_time if field_name == "scheduled_time" else fields[field_name]
+            setattr(reminder, field_name, value)
+
+    if old_task_id:
+        (revoke_task or _revoke_celery_task)(old_task_id)
+
+    reminder.status = "created"
+    reminder.celery_task_id = None
+    reminder.last_error = None
+    reminder.updated_at = utc_now()
     reminder.save()
-
-    # Re-scheduling: time may have changed, so re-enqueue the Celery task
-    # at the (possibly new) scheduled_time.
-    reminder.schedule()
+    reminder.schedule(task=task or _get_process_due_task())
     return reminder
 
 
-def delete_reminder(reminder_id: str):
-    """UC05: soft-delete a Reminder. The already-enqueued Celery task will
-    simply no-op if it fires later and finds is_deleted=True."""
+def delete_reminder(
+    reminder_id: str,
+    revoke_task: Optional[Callable[[str], None]] = None,
+) -> Reminder:
+    """UC05: cancel the queued task and soft-delete the active Reminder."""
     reminder = Reminder.objects.get(reminder_id=reminder_id, is_deleted=False)
+    if reminder.celery_task_id:
+        (revoke_task or _revoke_celery_task)(reminder.celery_task_id)
     reminder.is_deleted = True
-    reminder.updated_at = datetime.utcnow()
+    reminder.celery_task_id = None
+    reminder.updated_at = utc_now()
     reminder.save()
     return reminder
 
 
-def process_due_reminder(reminder_id: str):
+def process_due_reminder(
+    reminder_id: str,
+    task=None,
+    notification_sender: Optional[Callable[..., object]] = None,
+):
     """
-    UC12: called by the Celery task when a reminder's scheduled_time
-    arrives. Builds the Notification, sends it, and - for repeating
-    reminders - schedules the next occurrence.
+    UC12: atomically claim a due reminder, dispatch it once, and schedule
+    the next future occurrence when repetition is enabled.
     """
-    reminder = Reminder.objects(reminder_id=reminder_id, is_deleted=False).first()
+    now = utc_now()
+    reminder = Reminder.objects(
+        reminder_id=reminder_id,
+        is_deleted=False,
+        status="scheduled",
+        scheduled_time__lte=now,
+    ).modify(
+        set__status="sent",
+        set__updated_at=now,
+        new=True,
+    )
     if reminder is None:
-        # Reminder was deleted after being scheduled - nothing to do.
-        return
+        return None
+
+    settings = NotificationSettings.get_or_create_default(reminder.user_id)
+    if check_dnd_window(now, settings):
+        next_allowed = _next_dnd_end(now, settings)
+        reminder.status = "created"
+        reminder.scheduled_time = next_allowed
+        reminder.celery_task_id = None
+        reminder.updated_at = utc_now()
+        reminder.save()
+        reminder.schedule(task=task or _get_process_due_task())
+        return None
+
+    if not _channel_enabled(reminder.channel, settings):
+        reminder.status = "failed"
+        reminder.last_error = f"{reminder.channel} notifications are disabled"
+        reminder.updated_at = utc_now()
+        reminder.save()
+        return None
 
     notification = Notification(
         user_id=reminder.user_id,
         reminder_id=reminder.reminder_id,
         type="reminder",
+        title=reminder.title,
         content=reminder.message or reminder.title,
-    )
-    notification.save()
-    notification.send()
+    ).save()
 
-    reminder.mark_sent()
+    try:
+        if reminder.channel != "push":
+            raise NotImplementedError(f"{reminder.channel} delivery is not configured")
+        notification.send(sender=notification_sender or send_push_notification)
+    except Exception as exc:
+        reminder.status = "failed"
+        reminder.last_error = str(exc)
+        reminder.updated_at = utc_now()
+        reminder.save()
+        raise
 
-    next_run = _next_occurrence(reminder.scheduled_time, reminder.repeat_type)
+    next_run = _next_occurrence(reminder.scheduled_time, reminder.repeat_type, now)
     if next_run is not None:
-        # Repeating reminder: roll it forward and re-schedule.
         reminder.scheduled_time = next_run
         reminder.status = "created"
+        reminder.celery_task_id = None
+        reminder.last_error = None
+        reminder.updated_at = utc_now()
         reminder.save()
-        reminder.schedule()
-    else:
-        # One-off reminder: nothing more to do until the user marks it
-        # completed from the notification (handled by the controller).
-        pass
+        reminder.schedule(task=task or _get_process_due_task())
+    return notification
 
 
-def send_push_notification(user_id: str, title: str, message: str):
+def send_push_notification(user_id: str, title: str, message: str) -> PushSendResult:
     """
-    Send a push notification via Firebase Cloud Messaging using the
-    user's DeviceToken(s).
+    Send a push notification to every active FCM token.
 
-    UC11 exception flow: if Firebase is unreachable/misconfigured, the
-    failure is logged and swallowed here rather than raised - the
-    Notification document has already been saved to notification history,
-    so the user can still see it there even if the push itself failed.
-
-    NOTE: actual Firebase credentials/setup are not configured yet.
-    firebase_admin is imported lazily and guarded so this function stays
-    callable (and testable) before that integration is wired up.
+    Invalid tokens are soft-deleted. Provider failures are raised so
+    Notification.send() can record a failed delivery accurately.
     """
     tokens = DeviceToken.tokens_for_user(user_id)
     if not tokens:
-        logger.info("send_push_notification: no device tokens for user %s", user_id)
-        return
+        raise RuntimeError("no active device tokens for user")
 
     try:
         import firebase_admin
         from firebase_admin import messaging
+    except ImportError as exc:
+        raise RuntimeError("firebase_admin is not installed") from exc
 
-        if not firebase_admin._apps:
-            # Expects GOOGLE_APPLICATION_CREDENTIALS env var to point at
-            # the service-account JSON file, per the phase-3 external
-            # requirements around Firebase.
-            firebase_admin.initialize_app()
+    try:
+        firebase_admin.get_app()
+    except ValueError:
+        firebase_admin.initialize_app()
 
-        for token in tokens:
-            msg = messaging.Message(
-                notification=messaging.Notification(title=title, body=message),
-                token=token,
+    sent_count = 0
+    failures = []
+    message_ids = []
+    for token in tokens:
+        try:
+            message_id = messaging.send(
+                messaging.Message(
+                    notification=messaging.Notification(title=title, body=message),
+                    token=token,
+                )
             )
-            messaging.send(msg)
+            sent_count += 1
+            message_ids.append(message_id)
+        except Exception as exc:  # Provider SDK exposes several exception classes.
+            failures.append((token, exc))
+            if _is_invalid_fcm_token_error(exc):
+                DeviceToken.objects(fcm_token=token, is_deleted=False).update_one(
+                    set__is_deleted=True,
+                    set__updated_at=utc_now(),
+                )
 
-    except Exception as exc:  # noqa: BLE001 - deliberately broad: never crash the caller
-        logger.warning("send_push_notification failed for user %s: %s", user_id, exc)
+    if sent_count == 0:
+        details = "; ".join(str(exc) for _, exc in failures)
+        raise RuntimeError(f"push delivery failed for all tokens: {details}")
+    if failures:
+        logger.warning(
+            "Push partially failed for user %s: %s/%s tokens",
+            user_id,
+            len(failures),
+            len(tokens),
+        )
+
+    return PushSendResult(
+        message_id=message_ids[0] if len(message_ids) == 1 else None,
+        sent_count=sent_count,
+        failed_count=len(failures),
+    )
 
 
 def get_smart_reminder_suggestion(user_id: str):
     """
-    UC13: analyze the user's recent WorkoutSession history and suggest
-    a new reminder (e.g. missing weekly cardio). Returns None if no
-    suggestion applies.
-
-    Simple heuristic for now: if the user has logged zero WorkoutSessions
-    in the last 7 days, suggest a daily workout reminder. This can be
-    made smarter later (per-exercise-type frequency, etc.) without
-    changing the function's signature.
+    UC13: suggest a workout reminder only when the user is inactive,
+    push is enabled, and no active workout reminder already exists.
     """
-    one_week_ago = datetime.utcnow() - timedelta(days=7)
-    recent_sessions = WorkoutSession.objects(
+    settings = NotificationSettings.get_or_create_default(user_id)
+    if not settings.push_enabled:
+        return None
+
+    one_week_ago = utc_now() - timedelta(days=7)
+    has_recent_session = WorkoutSession.objects(
         user_id=user_id,
         is_deleted=False,
         session_date__gte=one_week_ago,
-    ).count()
+    ).first()
+    has_active_reminder = Reminder.objects(
+        user_id=user_id,
+        is_deleted=False,
+        status__in=("created", "scheduled"),
+    ).first()
 
-    if recent_sessions == 0:
+    if has_recent_session is None and has_active_reminder is None:
         return {
             "title": "وقتشه که برگردی به تمرین!",
             "message": "این هفته هنوز تمرینی ثبت نکردی. یه یادآور برات تنظیم کنیم؟",
             "suggested_repeat_type": "daily",
         }
-
     return None
 
 
-def get_notification_history(user_id: str) -> list:
-    """UC07: return the user's notification history, newest first."""
-    notifications = Notification.objects(
-        user_id=user_id, is_deleted=False
-    ).order_by("-created_at")
-    return list(notifications)
+def get_notification_history(user_id: str, limit: int = 100) -> list[Notification]:
+    """UC07: return the newest active notifications with a bounded result size."""
+    if not 1 <= limit <= 500:
+        raise ValueError("limit must be between 1 and 500")
+    return list(
+        Notification.objects(user_id=user_id, is_deleted=False)
+        .order_by("-created_at")
+        .limit(limit)
+    )
 
 
 def update_notification_settings(user_id: str, **fields) -> NotificationSettings:
-    """UC06/UC08: create-or-update the user's NotificationSettings."""
+    """UC06/UC08: validate and update only supported notification settings."""
+    unknown_fields = set(fields) - _SETTINGS_EDITABLE_FIELDS
+    if unknown_fields:
+        raise ValueError(f"unsupported settings fields: {sorted(unknown_fields)}")
+
     settings = NotificationSettings.get_or_create_default(user_id)
-
-    for field_name in ("push_enabled", "sms_enabled", "email_enabled", "dnd_start", "dnd_end"):
-        if field_name in fields and fields[field_name] is not None:
-            setattr(settings, field_name, fields[field_name])
-
-    settings.updated_at = datetime.utcnow()
+    for field_name, value in fields.items():
+        setattr(settings, field_name, value)
+    settings.updated_at = utc_now()
     settings.save()
     return settings
 
 
-def subscribe_to_event(user_id: str, event_type: str, reference_id: str) -> EventSubscription:
-    """UC08: register the user's interest in a future event (e.g. product restock)."""
-    subscription = EventSubscription(
+def subscribe_to_event(
+    user_id: str,
+    event_type: str,
+    reference_id: str,
+) -> EventSubscription:
+    """UC08: create, return, or reactivate one active event subscription."""
+    active = EventSubscription.objects(
         user_id=user_id,
         event_type=event_type,
         reference_id=reference_id,
-    )
-    subscription.save()
-    return subscription
+        is_deleted=False,
+    ).first()
+    if active is not None:
+        return active
 
+    deleted = EventSubscription.objects(
+        user_id=user_id,
+        event_type=event_type,
+        reference_id=reference_id,
+        is_deleted=True,
+    ).first()
+    if deleted is not None:
+        deleted.is_deleted = False
+        deleted.updated_at = utc_now()
+        deleted.save()
+        return deleted
 
-def notify_event_subscribers(event_type: str, reference_id: str, message: str):
-    """
-    Called by whichever part of the system detects that a subscribed-to
-    event has occurred (e.g. the store microservice signals a product is
-    back in stock). Fans the notification out to every subscriber.
-    """
-    user_ids = EventSubscription.subscribers_for(event_type, reference_id)
-
-    for user_id in user_ids:
-        notification = Notification(
+    try:
+        return EventSubscription(
             user_id=user_id,
-            type="event",
-            content=message,
+            event_type=event_type,
+            reference_id=reference_id,
+        ).save()
+    except me.NotUniqueError:
+        return EventSubscription.objects.get(
+            user_id=user_id,
+            event_type=event_type,
+            reference_id=reference_id,
+            is_deleted=False,
         )
-        notification.save()
-        notification.send()
+
+
+def notify_event_subscribers(
+    event_type: str,
+    reference_id: str,
+    message: str,
+    notification_sender: Optional[Callable[..., object]] = None,
+    consume_subscriptions: bool = True,
+) -> dict:
+    """
+    Fan an event notification out in batches and optionally consume
+    one-shot subscriptions after successful delivery attempts.
+    """
+    subscriptions = EventSubscription.objects(
+        event_type=event_type,
+        reference_id=reference_id,
+        is_deleted=False,
+    ).only("subscription_id", "user_id")
+
+    sent = 0
+    failed = 0
+    processed_ids = []
+    for subscription in subscriptions:
+        notification = Notification(
+            user_id=subscription.user_id,
+            type="event",
+            title="رویداد جدید",
+            content=message,
+        ).save()
+        try:
+            notification.send(sender=notification_sender or send_push_notification)
+            sent += 1
+            processed_ids.append(subscription.subscription_id)
+        except Exception:
+            failed += 1
+            logger.exception(
+                "Event notification failed for subscription %s",
+                subscription.subscription_id,
+            )
+
+    if consume_subscriptions and processed_ids:
+        EventSubscription.objects(subscription_id__in=processed_ids).update(
+            set__is_deleted=True,
+            set__updated_at=utc_now(),
+        )
+    return {"sent": sent, "failed": failed}
 
 
 # ============================================================
 # Internal helpers (not part of the public service API)
 # ============================================================
 
-def _next_occurrence(previous_time: datetime, repeat_type: str):
-    """Compute the next scheduled_time for a repeating reminder, or None for one-off reminders."""
-    if repeat_type == "daily":
-        return previous_time + timedelta(days=1)
-    if repeat_type == "weekly":
-        return previous_time + timedelta(weeks=1)
-    if repeat_type == "monthly":
-        return previous_time + timedelta(days=30)  # simple approximation
-    return None
+
+def _next_occurrence(
+    previous_time: datetime,
+    repeat_type: str,
+    now: Optional[datetime] = None,
+):
+    """Return the first repeated occurrence strictly after ``now``."""
+    if repeat_type == "none":
+        return None
+
+    current = _as_utc(previous_time)
+    comparison_time = _as_utc(now or utc_now())
+    while current <= comparison_time:
+        if repeat_type == "daily":
+            current += timedelta(days=1)
+        elif repeat_type == "weekly":
+            current += timedelta(weeks=1)
+        elif repeat_type == "monthly":
+            current += relativedelta(months=1)
+        else:
+            raise ValueError(f"unsupported repeat_type: {repeat_type}")
+    return current
 
 
 def _is_trainer_authorized(trainer_id: str, athlete_id: str) -> bool:
     """
-    Placeholder trainer-athlete authorization check.
-    TODO: replace with a real call to Core once the trainer-athlete
-    assignment model exists there. Always allows for now so the rest
-    of the mentor-report flow can be built and tested.
+    Fail-closed placeholder until Core provides trainer-athlete authorization.
+    A real checker should be injected into get_mentor_report().
     """
-    return True
+    logger.warning(
+        "Mentor report denied because no Core authorization checker is configured"
+    )
+    return False
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Normalize naive or aware datetimes to timezone-aware UTC."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _get_zone(timezone_name: str) -> ZoneInfo:
+    """Return a valid IANA timezone or raise a clear validation error."""
+    try:
+        return ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError as exc:
+        raise ValueError(f"unknown timezone: {timezone_name}") from exc
+
+
+def _next_dnd_end(now: datetime, settings: NotificationSettings) -> datetime:
+    """Compute the next end of the user's DND interval in UTC."""
+    zone = _get_zone(settings.timezone_name)
+    local_now = _as_utc(now).astimezone(zone)
+    end_hour, end_minute = map(int, settings.dnd_end.split(":"))
+    candidate = local_now.replace(
+        hour=end_hour,
+        minute=end_minute,
+        second=0,
+        microsecond=0,
+    )
+    if candidate <= local_now:
+        candidate += timedelta(days=1)
+    return candidate.astimezone(timezone.utc)
+
+
+def _channel_enabled(channel: str, settings: NotificationSettings) -> bool:
+    """Return whether the selected notification channel is enabled."""
+    return {
+        "push": settings.push_enabled,
+        "sms": settings.sms_enabled,
+        "email": settings.email_enabled,
+    }[channel]
+
+
+def _get_process_due_task():
+    """Import the Celery task without assuming one execution layout."""
+    try:
+        from .tasks import process_due_reminder as task
+    except ImportError:
+        from tasks import process_due_reminder as task  # type: ignore
+    return task
+
+
+def _revoke_celery_task(task_id: str) -> None:
+    """Revoke a queued Celery task using the current Celery application."""
+    try:
+        from celery import current_app
+    except ImportError as exc:
+        raise RuntimeError("Celery is not installed") from exc
+    current_app.control.revoke(task_id, terminate=False)
+
+
+def _is_invalid_fcm_token_error(exc: Exception) -> bool:
+    """Best-effort detection of provider errors that invalidate a token."""
+    name = exc.__class__.__name__.lower()
+    text = str(exc).lower()
+    markers = ("unregistered", "invalidargument", "invalid registration token")
+    return any(marker in name or marker in text for marker in markers)
 
 
 # ---- Redis helpers (soft-fail: caching is an optimization, not a requirement) ----
@@ -494,9 +776,8 @@ _redis_client = None
 
 def _get_redis_client():
     """
-    Lazily create a single shared Redis client using REDIS_URL from the
-    environment. Returns None (instead of raising) if Redis isn't
-    configured or reachable, so callers can treat caching as best-effort.
+    Lazily create a shared Redis client using REDIS_URL.
+    Return None when Redis is unavailable so caching remains optional.
     """
     global _redis_client
     if _redis_client is not None:
@@ -508,42 +789,64 @@ def _get_redis_client():
 
     try:
         import redis
-        _redis_client = redis.from_url(redis_url)
+
+        _redis_client = redis.from_url(
+            redis_url,
+            decode_responses=True,
+            socket_connect_timeout=1,
+            socket_timeout=1,
+        )
         _redis_client.ping()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("Redis unavailable, falling back to no cache: %s", exc)
         _redis_client = None
-
     return _redis_client
 
 
+def _reset_redis_client() -> None:
+    """Drop the cached Redis client so the next call can reconnect."""
+    global _redis_client
+    _redis_client = None
+
+
 def _redis_get(key: str):
+    """Read one cache key and reset the client after connection failures."""
     client = _get_redis_client()
     if client is None:
         return None
     try:
         return client.get(key)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:
+        logger.warning("Redis GET failed for %s: %s", key, exc)
+        _reset_redis_client()
         return None
 
 
-def _redis_set(key: str, value: str, ttl_seconds: int):
+def _redis_set(key: str, value: str, ttl_seconds: int) -> None:
+    """Write one cache key with a TTL and soft-fail on Redis errors."""
     client = _get_redis_client()
     if client is None:
         return
     try:
         client.set(key, value, ex=ttl_seconds)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:
+        logger.warning("Redis SET failed for %s: %s", key, exc)
+        _reset_redis_client()
 
 
-def _invalidate_chart_cache(user_id: str):
-    """Drop cached chart data for a user after any write that could change it."""
+def _redis_delete(key: str) -> None:
+    """Delete one cache key and soft-fail on Redis errors."""
     client = _get_redis_client()
     if client is None:
         return
     try:
-        for period in ("week", "month", "year"):
-            client.delete(f"chart:{user_id}:{period}")
-    except Exception:  # noqa: BLE001
-        pass
+        client.delete(key)
+    except Exception as exc:
+        logger.warning("Redis DELETE failed for %s: %s", key, exc)
+        _reset_redis_client()
+
+
+def _invalidate_chart_cache(user_id: str) -> None:
+    """Delete every known chart-cache key after progress-related writes."""
+    for period in _ALLOWED_PERIODS:
+        _redis_delete(f"chart:{user_id}:{period}")
