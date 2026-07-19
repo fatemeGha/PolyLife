@@ -28,9 +28,9 @@ MIDDLEWARE = [
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 
-# نکته مهم: چون از mongoengine برای اتصال به MongoDB استفاده می‌کنیم
-# (نه Django ORM)، این تنظیم فقط برای اینکه جنگو خطا ندهد لازم است
-# و هیچ‌وقت واقعاً استفاده نمی‌شود.
+# Django ORM is intentionally disabled.
+# All application data is stored through MongoEngine in MongoDB.
+# This dummy database exists only because Django requires DATABASES.
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
