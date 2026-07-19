@@ -1,39 +1,61 @@
 services:
   gateway:
     image: nginx:alpine
+    restart: unless-stopped
     ports:
       - "${TEAM_PORT}:80"
     volumes:
       - ./gateway.conf:/etc/nginx/conf.d/default.conf:ro
     environment:
       - CORE_BASE_URL=${CORE_BASE_URL}
-    networks: [polylife]
-    depends_on: [backend]
+    networks:
+      - polylife
+    depends_on:
+      - backend
 
   backend:
     build: .
-    env_file: .env
-    networks: [polylife, team]
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - polylife
+      - team
+    depends_on:
+      - db
+      - redis
 
   db:
     image: mongo:7
-    env_file: .env
+    restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
-    volumes: [db-data:/data/db]
-    networks: [team]
-  
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    volumes:
+      - db-data:/data/db
+    networks:
+      - team
+
   redis:
     image: redis:7-alpine
-    networks: [team]
+    restart: unless-stopped
+    networks:
+      - team
 
   celery-worker:
     build: .
+    restart: unless-stopped
     command: celery -A config worker --loglevel=info
-    env_file: .env
-    networks: [polylife, team]
-    depends_on: [redis, db]
+    env_file:
+      - .env
+    networks:
+      - polylife
+      - team
+    depends_on:
+      - db
+      - redis
 
 volumes:
   db-data:
@@ -42,4 +64,5 @@ networks:
   polylife:
     external: true
     name: polylife_net
+
   team:

@@ -1,9 +1,15 @@
 django==5.0.6
 gunicorn==22.0.0
+
 mongoengine==0.28.2
 pymongo==4.7.2
+
 celery==5.4.0
 redis==5.0.4
 
-# --- testing only ---
-mongomock
+python-dateutil==2.9.0.post0
+firebase-admin==6.5.0
+
+# Testing only
+mongomock==4.1.2
+coverage==7.6.1
