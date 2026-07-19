@@ -9,7 +9,7 @@ ALLOWED_HOSTS = ["*"]
 
 INSTALLED_APPS = [
     "django.contrib.staticfiles",
-    "teams.team7",
+    "teams.team7.apps.TeamConfig",
 ]
 
 MIDDLEWARE = [
