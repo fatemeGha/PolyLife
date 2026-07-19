@@ -22,6 +22,10 @@ class TeamConfig(AppConfig):
 
         DATABASE_URL must contain the full MongoDB connection URI.
         """
+
+        if os.environ.get("TESTING") == "1":
+            return        
+
         database_url = os.environ.get("DATABASE_URL")
 
         if not database_url:
