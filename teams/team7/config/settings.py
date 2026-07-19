@@ -4,7 +4,12 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-secret-change-me")
-DEBUG = os.environ.get("DEBUG", "True") == "True"
+DEBUG = os.environ.get("DEBUG", "False").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 ALLOWED_HOSTS = ["*"]
 
 INSTALLED_APPS = [
