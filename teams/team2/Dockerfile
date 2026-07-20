@@ -1,15 +1,26 @@
-# Team team2 — backend image.  *** REPLACE WITH YOUR OWN STACK ***
-# Build your service so it listens on port 8000 and serves both your UI (/)
-# and your API (/api/...). It reads the trusted X-User-* headers the gateway
-# injects, and connects to its own database via DATABASE_URL (from .env).
-#
-# Minimal Django starting point (uncomment and flesh out):
-# FROM python:3.12-slim
-# WORKDIR /app
-# COPY requirements.txt .
-# RUN pip install --no-cache-dir -r requirements.txt
-# COPY . .
-# EXPOSE 8000
-# CMD ["gunicorn", "yourproject.wsgi:application", "-b", "0.0.0.0:8000"]
-FROM python:3.12-slim
-CMD ["sh", "-c", "echo 'Team team2: replace this Dockerfile with your service'; sleep infinity"]
+# Base image for Team2 microservice
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DJANGO_SETTINGS_MODULE=polylife.settings
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY teams/team2/requirements.txt /app/team2_requirements.txt
+RUN pip install --no-cache-dir -r /app/team2_requirements.txt
+
+# Copy project source
+COPY . /app/
+
+# Default command (overridden in docker-compose per service)
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
