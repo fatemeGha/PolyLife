@@ -6,7 +6,7 @@ Controllers are intentionally thin:
     - Call the appropriate service function
     - Return a standardized JSON response
 
-All domain/business logic lives in services/progress_service.py
+All domain/business logic lives in services/
 """
 
 import json
@@ -15,7 +15,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 
 from .utils.auth import gateway_auth_required, success_response, error_response
-from .services import progress_service
+from .services import progress_service, reminder_service
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +186,6 @@ def physical_record_detail(request, record_id: int):
         )
 
         if not success:
-            # Distinguish between validation errors (400) and not-found (404)
             status_code = 404 if not data else 400
             return error_response(message=message, errors=data, status=status_code)
 
@@ -269,14 +268,7 @@ def progress_summary(request):
     """
     GET /api/team2/progress/summary/
 
-    Returns a progress summary for the authenticated user:
-        - Current weight, BMI, BMI category, body fat, muscle mass
-        - Active fitness goal (target weight, target date)
-        - Weight remaining to reach the goal
-        - Whether the goal has been reached
-
-    Returns null-safe data even when no records or goals exist yet.
-    Authentication: Gateway headers required.
+    Returns a progress summary for the authenticated user.
     """
     user_id = request.user_info["user_id"]
     summary = progress_service.get_progress_summary(user_id)
@@ -284,6 +276,270 @@ def progress_summary(request):
     return success_response(
         data=summary,
         message="Progress summary retrieved successfully.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Reminders — List & Create (New in Phase 7.3)
+# ---------------------------------------------------------------------------
+
+@csrf_exempt
+@gateway_auth_required
+def reminder_list_create(request):
+    """
+    Handles listing and creating reminders for the authenticated user.
+
+    GET  /api/team2/reminders/
+        Returns all active (non-deleted, non-completed) reminders.
+        Query param: ?include_completed=true  → include completed reminders.
+
+    POST /api/team2/reminders/
+        Creates a new reminder.
+
+        Required fields:
+            title          (string)
+            reminder_time  (HH:MM or HH:MM:SS)
+
+        Optional fields:
+            message                  (string, default: "")
+            recurrence_pattern       (none | daily | weekly, default: none)
+            force_send_in_quiet_hours (bool, default: false)
+
+        Quiet Hours Behavior:
+            If the reminder_time falls within the user's quiet hours AND
+            force_send_in_quiet_hours is false, the request is rejected with
+            HTTP 409 and a detailed warning showing the quiet window.
+
+    Authentication: Gateway headers required.
+    """
+    user_id = request.user_info["user_id"]
+
+    # ------------------------------------------------------------------
+    # GET: list reminders
+    # ------------------------------------------------------------------
+    if request.method == "GET":
+        include_completed = request.GET.get("include_completed", "").lower() == "true"
+        reminders = reminder_service.get_user_reminders(user_id, include_completed)
+        return success_response(
+            data={"reminders": reminders, "count": len(reminders)},
+            message="Reminders retrieved successfully.",
+        )
+
+    # ------------------------------------------------------------------
+    # POST: create reminder
+    # ------------------------------------------------------------------
+    if request.method == "POST":
+        body, parse_error = parse_json_body(request)
+        if parse_error:
+            return error_response(message=parse_error, status=400)
+
+        force = bool(body.get("force_send_in_quiet_hours", False))
+
+        success, data, message = reminder_service.create_reminder(
+            user_id=user_id,
+            title=body.get("title"),
+            reminder_time_str=body.get("reminder_time"),
+            recurrence_pattern=body.get("recurrence_pattern", "none"),
+            message=body.get("message", ""),
+            force=force,
+        )
+
+        if not success:
+            # Quiet hours conflict → 409, validation error → 400
+            status_code = 409 if "quiet_hours_conflict" in data else 400
+            return error_response(message=message, errors=data, status=status_code)
+
+        return success_response(data=data, message=message, status=201)
+
+    return error_response(
+        message="Method not allowed. Supported methods: GET, POST.",
+        status=405,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Reminders — Detail (Update / Delete) (New in Phase 7.3)
+# ---------------------------------------------------------------------------
+
+@csrf_exempt
+@gateway_auth_required
+def reminder_detail(request, reminder_id: int):
+    """
+    Handles updating and soft-deleting a single reminder.
+
+    PUT    /api/team2/reminders/<id>/
+        Partial update — only provided fields are changed.
+        Re-validates quiet hours if reminder_time changes.
+
+    DELETE /api/team2/reminders/<id>/
+        Soft-deletes the reminder (is_deleted=True, is_active=False).
+
+    Ownership: Users can only modify their own reminders.
+    Authentication: Gateway headers required.
+    """
+    user_id = request.user_info["user_id"]
+
+    # ------------------------------------------------------------------
+    # PUT: update reminder
+    # ------------------------------------------------------------------
+    if request.method == "PUT":
+        body, parse_error = parse_json_body(request)
+        if parse_error:
+            return error_response(message=parse_error, status=400)
+
+        force = bool(body.get("force_send_in_quiet_hours", False))
+
+        success, data, message = reminder_service.update_reminder(
+            user_id=user_id,
+            reminder_id=reminder_id,
+            title=body.get("title"),
+            reminder_time_str=body.get("reminder_time"),
+            recurrence_pattern=body.get("recurrence_pattern"),
+            message=body.get("message"),
+            is_active=body.get("is_active"),
+            force=force,
+        )
+
+        if not success:
+            status_code = 404 if not data else (
+                409 if "quiet_hours_conflict" in data else 400
+            )
+            return error_response(message=message, errors=data, status=status_code)
+
+        return success_response(data=data, message=message)
+
+    # ------------------------------------------------------------------
+    # DELETE: soft delete
+    # ------------------------------------------------------------------
+    if request.method == "DELETE":
+        success, data, message = reminder_service.soft_delete_reminder(
+            user_id=user_id,
+            reminder_id=reminder_id,
+        )
+
+        if not success:
+            return error_response(message=message, status=404)
+
+        return success_response(data=data, message=message)
+
+    return error_response(
+        message="Method not allowed. Supported methods: PUT, DELETE.",
+        status=405,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Reminders — Mark as Completed (New in Phase 7.3)
+# ---------------------------------------------------------------------------
+
+@csrf_exempt
+@gateway_auth_required
+def reminder_complete(request, reminder_id: int):
+    """
+    PATCH /api/team2/reminders/<id>/complete/
+
+    Marks the specified reminder as completed.
+    No request body required.
+    """
+    user_id = request.user_info["user_id"]
+
+    if request.method == "PATCH":
+        success, data, message = reminder_service.complete_reminder(
+            user_id=user_id,
+            reminder_id=reminder_id,
+        )
+
+        if not success:
+            status_code = 404 if not data else 400
+            return error_response(message=message, errors=data, status=status_code)
+
+        return success_response(data=data, message=message)
+
+    return error_response(
+        message="Method not allowed. Supported method: PATCH.",
+        status=405,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Notification Settings (New in Phase 7.3)
+# ---------------------------------------------------------------------------
+
+@csrf_exempt
+@gateway_auth_required
+def notification_settings(request):
+    """
+    Handles retrieving and updating notification preferences.
+
+    GET /api/team2/notification-settings/
+        Returns current settings (creates defaults on first access).
+
+    PUT /api/team2/notification-settings/
+        Updates settings fields.
+
+    Authentication: Gateway headers required.
+    """
+    user_id = request.user_info["user_id"]
+
+    # ------------------------------------------------------------------
+    # GET: retrieve settings
+    # ------------------------------------------------------------------
+    if request.method == "GET":
+        success, data, message = reminder_service.get_notification_settings(user_id)
+        return success_response(data=data, message=message)
+
+    # ------------------------------------------------------------------
+    # PUT: update settings
+    # ------------------------------------------------------------------
+    if request.method == "PUT":
+        body, parse_error = parse_json_body(request)
+        if parse_error:
+            return error_response(message=parse_error, status=400)
+
+        success, data, message = reminder_service.update_notification_settings(
+            user_id=user_id,
+            is_enabled=body.get("is_enabled"),
+            quiet_hours_start_str=body.get("quiet_hours_start"),
+            quiet_hours_end_str=body.get("quiet_hours_end"),
+        )
+
+        if not success:
+            return error_response(message=message, errors=data, status=400)
+
+        return success_response(data=data, message=message)
+
+    return error_response(
+        message="Method not allowed. Supported methods: GET, PUT.",
+        status=405,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Notification History (New in Phase 7.3)
+# ---------------------------------------------------------------------------
+
+@require_http_methods(["GET"])
+@gateway_auth_required
+def notification_history(request):
+    """
+    GET /api/team2/notifications/history/
+
+    Returns the authenticated user's notification audit log.
+    """
+    user_id = request.user_info["user_id"]
+    status_filter = request.GET.get("status")
+
+    success, data, message = reminder_service.get_notification_history(
+        user_id=user_id,
+        status_filter=status_filter,
+    )
+
+    if not success:
+        return error_response(message=message, status=400)
+
+    return success_response(
+        data={"notifications": data, "count": len(data)},
+        message=message,
     )
 
 
@@ -298,3 +554,4 @@ def not_found(request, exception=None):
         errors={"path": f"No route matched: {request.path}"},
         status=404,
     )
+
