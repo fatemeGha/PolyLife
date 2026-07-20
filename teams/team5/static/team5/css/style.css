@@ -1,0 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Abril+Fatface&display=swap');
+
+:root{
+    --primary:#185E64;
+    --secondary:#BCDADD;
+    --light:#CDF1F4;
+    --cream:#FDE6C3;
+    --gray:#D9D9D9;
+    --white:#FFFFFF;
+    --black:#000000;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--light);font-family:Vazirmatn,sans-serif;color:var(--black);}
+.container{width:92%;margin:40px auto;}
