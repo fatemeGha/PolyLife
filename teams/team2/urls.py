@@ -26,6 +26,9 @@ Route summary:
     PUT  /api/team2/notification-settings/       — Update quiet hours settings
 
     GET  /api/team2/notifications/history/       — View notification history logs
+
+    GET  /api/team2/progress/charts/             — Get chart data (New in Phase 9)
+    GET  /api/team2/trainer/users/<id>/progress/ — Get student progress (New in Phase 9)
 """
 
 from django.urls import path
@@ -69,7 +72,7 @@ urlpatterns = [
     ),
 
     # ------------------------------------------------------------------
-    # Reminders CRUD (New in Phase 7.3)
+    # Reminders CRUD
     # ------------------------------------------------------------------
     path(
         "reminders/",
@@ -88,7 +91,7 @@ urlpatterns = [
     ),
 
     # ------------------------------------------------------------------
-    # Notification Settings (New in Phase 7.3)
+    # Notification Settings
     # ------------------------------------------------------------------
     path(
         "notification-settings/",
@@ -97,12 +100,29 @@ urlpatterns = [
     ),
 
     # ------------------------------------------------------------------
-    # Notification History Logs (New in Phase 7.3)
+    # Notification History Logs
     # ------------------------------------------------------------------
     path(
         "notifications/history/",
         views.notification_history,
         name="notification-history",
     ),
-]
 
+    # ------------------------------------------------------------------
+    # Chart Data (New in Phase 9)
+    # ------------------------------------------------------------------
+    path(
+        "progress/charts/",
+        views.chart_data,
+        name="chart-data",
+    ),
+
+    # ------------------------------------------------------------------
+    # Trainer — Student Progress (New in Phase 9)
+    # ------------------------------------------------------------------
+    path(
+        "trainer/users/<int:student_id>/progress/",
+        views.trainer_student_progress,
+        name="trainer-student-progress",
+    ),
+]

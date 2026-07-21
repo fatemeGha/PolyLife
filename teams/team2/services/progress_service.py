@@ -470,3 +470,143 @@ def get_progress_summary(user_id: int) -> dict:
         "goal": goal_data,
         "progress": progress,
     }
+
+# ---------------------------------------------------------------------------
+# Chart Data Service
+# ---------------------------------------------------------------------------
+
+# Valid query parameter values — enforced at service layer
+VALID_METRICS = {"weight", "bmi", "body_fat_percentage", "muscle_mass"}
+VALID_PERIODS = {"weekly", "monthly", "yearly"}
+
+# Period → number of days to look back
+PERIOD_DAYS_MAP = {
+    "weekly": 7,
+    "monthly": 30,
+    "yearly": 365,
+}
+
+
+def get_chart_data(user_id: int,
+                   metric: str,
+                   period: str) -> tuple[bool, dict, str]:
+    """
+    Build time-series data for charting a single physical metric.
+
+    Filters the user's non-deleted physical records within the requested
+    time window and returns a list of (date, value) pairs sorted ascending
+    by date, ready to be consumed by a front-end charting library.
+
+    Supported metrics:
+        weight              — body weight in kg
+        bmi                 — Body Mass Index (auto-calculated)
+        body_fat_percentage — body fat %
+        muscle_mass         — muscle mass in kg
+
+    Supported periods:
+        weekly  — last 7 days
+        monthly — last 30 days
+        yearly  — last 365 days
+
+    Args:
+        user_id : Authenticated user's ID.
+        metric  : The physical metric to plot.
+        period  : Time window to include.
+
+    Returns:
+        tuple: (success: bool, data: dict, message: str)
+            On success:
+                data = {
+                    "metric": str,
+                    "period": str,
+                    "unit": str,
+                    "points": [{"date": "YYYY-MM-DD", "value": float}, ...]
+                }
+            On failure:
+                data = field-level error dict
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+
+    # ------------------------------------------------------------------
+    # Validate query parameters
+    # ------------------------------------------------------------------
+    errors = {}
+
+    if not metric:
+        errors["metric"] = (
+            f"The 'metric' parameter is required. "
+            f"Allowed values: {', '.join(sorted(VALID_METRICS))}."
+        )
+    elif metric not in VALID_METRICS:
+        errors["metric"] = (
+            f"Invalid metric '{metric}'. "
+            f"Allowed values: {', '.join(sorted(VALID_METRICS))}."
+        )
+
+    if not period:
+        errors["period"] = (
+            f"The 'period' parameter is required. "
+            f"Allowed values: {', '.join(sorted(VALID_PERIODS))}."
+        )
+    elif period not in VALID_PERIODS:
+        errors["period"] = (
+            f"Invalid period '{period}'. "
+            f"Allowed values: {', '.join(sorted(VALID_PERIODS))}."
+        )
+
+    if errors:
+        return False, errors, "Invalid query parameters."
+
+    # ------------------------------------------------------------------
+    # Compute date range
+    # ------------------------------------------------------------------
+    now = timezone.localtime(timezone.now())
+    days_back = PERIOD_DAYS_MAP[period]
+    start_date = now - timedelta(days=days_back)
+
+    # ------------------------------------------------------------------
+    # Query records within the window
+    # ------------------------------------------------------------------
+    records = PhysicalRecord.objects.filter(
+        user_id=user_id,
+        is_deleted=False,
+        created_at__gte=start_date,
+    ).order_by("created_at")   # ascending — chronological order for chart
+
+    # ------------------------------------------------------------------
+    # Build data points — skip records where the metric value is None
+    # (body_fat_percentage and muscle_mass are optional fields)
+    # ------------------------------------------------------------------
+    points = []
+    for record in records:
+        value = getattr(record, metric, None)
+        if value is None:
+            continue
+        points.append({
+            "date": record.created_at.strftime("%Y-%m-%d"),
+            "value": round(float(value), 2),
+        })
+
+    # ------------------------------------------------------------------
+    # Metric → human-readable unit label
+    # ------------------------------------------------------------------
+    unit_map = {
+        "weight": "kg",
+        "bmi": "kg/m²",
+        "body_fat_percentage": "%",
+        "muscle_mass": "kg",
+    }
+
+    data = {
+        "metric": metric,
+        "period": period,
+        "period_days": days_back,
+        "unit": unit_map[metric],
+        "start_date": start_date.strftime("%Y-%m-%d"),
+        "end_date": now.strftime("%Y-%m-%d"),
+        "points": points,
+        "count": len(points),
+    }
+
+    return True, data, f"Chart data for '{metric}' over the last {days_back} days retrieved successfully."

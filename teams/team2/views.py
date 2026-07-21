@@ -555,3 +555,118 @@ def not_found(request, exception=None):
         status=404,
     )
 
+# ---------------------------------------------------------------------------
+# Chart Data (New in Phase 9)
+# ---------------------------------------------------------------------------
+
+@require_http_methods(["GET"])
+@gateway_auth_required
+def chart_data(request):
+    """
+    GET /api/team2/progress/charts/
+
+    Returns time-series data points for a single physical metric,
+    suitable for rendering line/bar charts on the front-end.
+
+    Query parameters (both required):
+        metric : One of — weight | bmi | body_fat_percentage | muscle_mass
+        period : One of — weekly | monthly | yearly
+
+    Response shape:
+        {
+            "success": true,
+            "message": "...",
+            "data": {
+                "metric": "weight",
+                "period": "monthly",
+                "period_days": 30,
+                "unit": "kg",
+                "start_date": "YYYY-MM-DD",
+                "end_date": "YYYY-MM-DD",
+                "count": 12,
+                "points": [
+                    {"date": "YYYY-MM-DD", "value": 80.5},
+                    ...
+                ]
+            }
+        }
+
+    Error responses:
+        400 — invalid or missing query parameters
+        401 — missing Gateway auth headers
+
+    Authentication: Gateway headers required (X-User-Id, X-User-Username).
+    """
+    user_id = request.user_info["user_id"]
+
+    metric = request.GET.get("metric", "").strip().lower()
+    period = request.GET.get("period", "").strip().lower()
+
+    success, data, message = progress_service.get_chart_data(
+        user_id=user_id,
+        metric=metric,
+        period=period,
+    )
+
+    if not success:
+        return error_response(message=message, errors=data, status=400)
+
+    return success_response(data=data, message=message)
+
+
+# ---------------------------------------------------------------------------
+# Trainer — View Student Progress (New in Phase 9)
+# ---------------------------------------------------------------------------
+
+@require_http_methods(["GET"])
+@gateway_auth_required
+def trainer_student_progress(request, student_id: int):
+    """
+    GET /api/team2/trainer/users/<student_id>/progress/
+
+    Allows an authenticated trainer to view the progress summary of a
+    specific student identified by student_id.
+
+    The response format is identical to GET /api/team2/progress/summary/
+    but scoped to the requested student's data.
+
+    Path parameter:
+        student_id (int) : The user_id of the student to inspect.
+
+    Design note:
+        This endpoint trusts that the requester is a trainer.
+        Role-based access control (RBAC) is intentionally left to
+        the Gateway / Core service layer. This microservice does not
+        manage roles — it only serves data.
+
+    Error responses:
+        400 — invalid student_id (non-positive integer)
+        401 — missing Gateway auth headers
+        404 — student has no data (empty summary)
+
+    Authentication: Gateway headers required.
+    """
+    # Basic sanity check on the path parameter
+    if student_id <= 0:
+        return error_response(
+            message="Invalid student_id. Must be a positive integer.",
+            errors={"student_id": "Must be a positive integer greater than 0."},
+            status=400,
+        )
+
+    summary = progress_service.get_progress_summary(user_id=student_id)
+
+    # If the student has no records at all, return 404 to signal
+    # the trainer that this student has not logged any data yet.
+    if summary.get("current") is None and summary.get("goal") is None:
+        return error_response(
+            message=f"No progress data found for student with ID {student_id}.",
+            errors={"student_id": "Student has not recorded any physical data yet."},
+            status=404,
+        )
+
+    return success_response(
+        data=summary,
+        message=f"Progress summary for student {student_id} retrieved successfully.",
+    )
+
