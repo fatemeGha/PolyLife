@@ -1,30 +1,26 @@
-# Team team7 — backend image.  *** REPLACE WITH YOUR OWN STACK ***
-# Build your service so it listens on port 8000 and serves both your UI (/)
-# and your API (/api/...). It reads the trusted X-User-* headers the gateway
-# injects, and connects to its own database via DATABASE_URL (from .env).
-#
-# Minimal Django starting point (uncomment and flesh out):
-# FROM python:3.12-slim
-# WORKDIR /app
-# COPY requirements.txt .
-# RUN pip install --no-cache-dir -r requirements.txt
-# COPY . .
-# EXPOSE 8000
-# CMD ["gunicorn", "yourproject.wsgi:application", "-b", "0.0.0.0:8000"]
-FROM python:3.12-slim
+# Base image for Team2 microservice
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DJANGO_SETTINGS_MODULE=polylife.settings
+
+# Set working directory
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# این پوشه (team7) را در مسیری کپی می‌کنیم که apps.py انتظارش را دارد:
-# teams/team7/ ...
-COPY . /app/teams/team7
-RUN mkdir -p /app/teams && touch /app/teams/__init__.py
+# Install Python dependencies
+COPY teams/team2/requirements.txt /app/team2_requirements.txt
+RUN pip install --no-cache-dir -r /app/team2_requirements.txt
 
-# فایل‌های سطح پروژه به ریشه /app منتقل می‌شوند
-COPY manage.py /app/manage.py
-COPY config /app/config
+# Copy project source
+COPY . /app/
 
-EXPOSE 8000
-CMD ["gunicorn", "config.wsgi:application", "-b", "0.0.0.0:8000"]
+# Default command (overridden in docker-compose per service)
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

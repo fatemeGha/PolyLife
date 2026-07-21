@@ -1,4 +1,4 @@
-"""MongoEngine models for Team 7.
+"""MongoEngine models for Team 2.
 
 The module contains document-level validation and entity-local behavior.
 Operations involving external systems can receive dependencies explicitly,
