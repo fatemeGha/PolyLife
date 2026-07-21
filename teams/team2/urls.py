@@ -52,7 +52,7 @@ urlpatterns = [
         name="physical-records",
     ),
     path(
-        "progress/records/<int:record_id>/",
+        "progress/records/<str:record_id>/",
         views.physical_record_detail,
         name="physical-record-detail",
     ),
@@ -80,12 +80,12 @@ urlpatterns = [
         name="reminder-list-create",
     ),
     path(
-        "reminders/<int:reminder_id>/",
+        "reminders/<str:reminder_id>/",
         views.reminder_detail,
         name="reminder-detail",
     ),
     path(
-        "reminders/<int:reminder_id>/complete/",
+        "reminders/<str:reminder_id>/complete/",
         views.reminder_complete,
         name="reminder-complete",
     ),

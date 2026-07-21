@@ -13,23 +13,25 @@ class TeamConfig(AppConfig):
     """
 
     default_auto_field = "django.db.models.BigAutoField"
-    name = "teams.team7"
-    label = "team7"
+    # Updated to point to the correct team2 package    
+    name = "teams.team2"
+    label = "team2"
 
     def ready(self):
         """
         Connect MongoEngine to the team database once per process.
 
-        DATABASE_URL must contain the full MongoDB connection URI.
+        MONGO_DATABASE_URL must contain the full MongoDB connection URI.
         """
 
         if os.environ.get("TESTING") == "1":
-            return        
+            return
 
-        database_url = os.environ.get("DATABASE_URL")
+        # Retrieve MongoDB connection string from MONGO_DATABASE_URL environment variable
+        database_url = os.environ.get("MONGO_DATABASE_URL")
 
         if not database_url:
-            raise RuntimeError("DATABASE_URL is not configured")
+            raise RuntimeError("MONGO_DATABASE_URL is not configured")
 
         try:
             get_connection(alias="default")

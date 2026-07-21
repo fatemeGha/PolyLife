@@ -9,7 +9,7 @@ from unittest.mock import Mock
 import mongoengine
 import mongomock
 
-from models import (
+from ..models import (
     DeviceToken,
     EventSubscription,
     Goal,

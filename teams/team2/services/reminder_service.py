@@ -3,18 +3,18 @@ Business logic for the Reminder & Notification domain.
 
 Rules enforced here:
     - Reminder time is validated against the user's quiet hours window.
-    - Quiet hours can span midnight (e.g., 22:00 → 08:00).
+    - Quiet hours can span midnight (e.g., 22:00 -> 08:00).
     - A reminder in quiet hours is rejected UNLESS force=True is passed.
     - Users can only access/modify their own reminders.
     - Deletion is always soft (is_deleted = True).
-    - NotificationSetting is auto-created with defaults on first access.
-    - NotificationLog entries are append-only (never modified after creation).
+    - NotificationSettings is auto-created with defaults on first access.
+    - Notification entries are append-only (never modified after creation).
     - Completing a reminder sets is_completed=True and is_active=False.
 """
 
-from datetime import datetime, time as time_type
-
-from ..models import Reminder, NotificationSetting, NotificationLog
+from datetime import datetime, date, timedelta, time as time_type
+from django.utils import timezone
+from ..models import Reminder, NotificationSettings, Notification
 
 
 # ---------------------------------------------------------------------------
@@ -34,36 +34,16 @@ def is_in_quiet_hours(check_time: time_type,
                        quiet_end: time_type) -> bool:
     """
     Determine whether a given time falls within the quiet hours window.
-
-    Handles both same-day windows (e.g., 09:00 – 17:00)
-    and overnight windows (e.g., 22:00 – 08:00).
-
-    Args:
-        check_time  : The time to evaluate (e.g., reminder_time).
-        quiet_start : Start of the quiet hours window.
-        quiet_end   : End of the quiet hours window.
-
-    Returns:
-        bool: True if check_time is inside the quiet window, False otherwise.
     """
     if quiet_start <= quiet_end:
-        # Same-day window: e.g., 09:00 – 17:00
         return quiet_start <= check_time <= quiet_end
     else:
-        # Overnight window: e.g., 22:00 – 08:00
         return check_time >= quiet_start or check_time <= quiet_end
 
 
 def parse_time_string(time_str: str) -> tuple[time_type | None, str | None]:
     """
     Parse a time string in HH:MM or HH:MM:SS format into a time object.
-
-    Args:
-        time_str: String representation of time.
-
-    Returns:
-        (time_object, None)     on success
-        (None, error_message)   on failure
     """
     if not time_str:
         return None, "Time value is required."
@@ -79,23 +59,14 @@ def parse_time_string(time_str: str) -> tuple[time_type | None, str | None]:
 
 
 # ---------------------------------------------------------------------------
-# Notification Settings Helpers
+# Notification Settings Helpers (Updated to MongoEngine native classmethod)
 # ---------------------------------------------------------------------------
 
-def get_or_create_notification_settings(user_id: int) -> NotificationSetting:
+def get_or_create_notification_settings(user_id: int) -> NotificationSettings:
     """
     Retrieve the user's notification settings, creating defaults if none exist.
     """
-    settings, _ = NotificationSetting.objects.get_or_create(
-        user_id=user_id,
-        defaults={
-            "is_enabled": True,
-            "quiet_hours_start": DEFAULT_QUIET_START,
-            "quiet_hours_end": DEFAULT_QUIET_END,
-            "is_deleted": False,
-        },
-    )
-    return settings
+    return NotificationSettings.get_or_create_default(str(user_id))
 
 
 # ---------------------------------------------------------------------------
@@ -107,43 +78,42 @@ def serialize_reminder(reminder: Reminder) -> dict:
     Convert a Reminder model instance to a JSON-serializable dict.
     """
     return {
-        "id": reminder.id,
+        "id": str(reminder.id),
         "user_id": reminder.user_id,
         "title": reminder.title,
         "message": reminder.message,
-        "reminder_time": reminder.reminder_time.strftime("%H:%M"),
-        "recurrence_pattern": reminder.recurrence_pattern,
-        "is_active": reminder.is_active,
-        "is_completed": reminder.is_completed,
-        "force_send_in_quiet_hours": reminder.force_send_in_quiet_hours,
+        "reminder_time": reminder.scheduled_time.strftime("%H:%M"),
+        "recurrence_pattern": reminder.repeat_type, # Map repeat_type field to recurrence_pattern in API
+        "is_active": reminder.status == "scheduled", # active maps to scheduled status
+        "is_completed": reminder.status == "completed",
+        "force_send_in_quiet_hours": reminder.is_deleted, # Temporary placeholder
         "created_at": reminder.created_at.isoformat(),
-        "updated_at": reminder.updated_at.isoformat(),
     }
 
 
-def serialize_notification_setting(settings: NotificationSetting) -> dict:
+def serialize_notification_setting(settings: NotificationSettings) -> dict:
     """
-    Convert a NotificationSetting instance to a JSON-serializable dict.
+    Convert a NotificationSettings instance to a JSON-serializable dict.
     """
     return {
         "user_id": settings.user_id,
-        "is_enabled": settings.is_enabled,
-        "quiet_hours_start": settings.quiet_hours_start.strftime("%H:%M"),
-        "quiet_hours_end": settings.quiet_hours_end.strftime("%H:%M"),
-        "updated_at": settings.updated_at.isoformat(),
+        "is_enabled": settings.push_enabled, # Map push_enabled to is_enabled key
+        "quiet_hours_start": settings.dnd_start, # Map dnd_start to quiet_hours_start
+        "quiet_hours_end": settings.dnd_end, # Map dnd_end to quiet_hours_end
+        "updated_at": settings.updated_at.isoformat() if settings.updated_at else settings.created_at.isoformat(),
     }
 
 
-def serialize_notification_log(log: NotificationLog) -> dict:
+def serialize_notification_log(log: Notification) -> dict:
     """
-    Convert a NotificationLog instance to a JSON-serializable dict.
+    Convert a Notification instance to a JSON-serializable dict.
     """
     return {
-        "id": log.id,
-        "reminder_id": log.reminder_id,
+        "id": str(log.id),
+        "reminder_id": str(log.reminder_id) if log.reminder_id else None,
         "title": log.title,
-        "message": log.message,
-        "status": log.status,
+        "message": log.content, # Map 'content' on model to 'message' in API response
+        "status": log.delivery_status, # Map 'delivery_status' on model to 'status' in API response
         "sent_at": log.sent_at.isoformat() if log.sent_at else None,
         "created_at": log.created_at.isoformat(),
     }
@@ -173,11 +143,10 @@ def validate_reminder_data(title: str,
         if time_error:
             errors["reminder_time"] = time_error
 
-    valid_patterns = [p.value for p in Reminder.RecurrencePattern]
-    if recurrence_pattern is not None and recurrence_pattern not in valid_patterns:
+    if recurrence_pattern is not None and recurrence_pattern not in Reminder.REPEAT_CHOICES:
         errors["recurrence_pattern"] = (
             f"Invalid recurrence pattern '{recurrence_pattern}'. "
-            f"Allowed values: {', '.join(valid_patterns)}."
+            f"Allowed values: {', '.join(Reminder.REPEAT_CHOICES)}."
         )
 
     return errors
@@ -190,19 +159,24 @@ def check_quiet_hours_conflict(reminder_time: time_type,
     """
     settings = get_or_create_notification_settings(user_id)
 
-    if not settings.is_enabled:
+    # DND is honored if push_enabled is true
+    if not settings.push_enabled:
         return False, None
+
+    # Parse quiet hours strings to time objects
+    q_start, _ = parse_time_string(settings.dnd_start)
+    q_end, _ = parse_time_string(settings.dnd_end)
 
     conflict = is_in_quiet_hours(
         check_time=reminder_time,
-        quiet_start=settings.quiet_hours_start,
-        quiet_end=settings.quiet_hours_end,
+        quiet_start=q_start,
+        quiet_end=q_end,
     )
 
     if conflict:
         warning = {
-            "quiet_hours_start": settings.quiet_hours_start.strftime("%H:%M"),
-            "quiet_hours_end": settings.quiet_hours_end.strftime("%H:%M"),
+            "quiet_hours_start": settings.dnd_start,
+            "quiet_hours_end": settings.dnd_end,
             "reminder_time": reminder_time.strftime("%H:%M"),
             "hint": (
                 "The reminder time falls within your quiet hours. "
@@ -228,20 +202,12 @@ def create_reminder(user_id: int,
     """
     Create and persist a new reminder, then schedule the Celery task.
     """
-    from datetime import datetime, date
-    import logging
-
-    logger = logging.getLogger("team2.services.reminder")
-
-    # Step 1: field validation
     errors = validate_reminder_data(title, reminder_time_str, recurrence_pattern)
     if errors:
         return False, errors, "Validation failed. Please correct the errors and try again."
 
-    # Step 2: parse time
     reminder_time, _ = parse_time_string(str(reminder_time_str))
 
-    # Step 3: quiet hours check
     if not force:
         conflict, warning = check_quiet_hours_conflict(reminder_time, user_id)
         if conflict:
@@ -252,93 +218,27 @@ def create_reminder(user_id: int,
                 "Set 'force_send_in_quiet_hours' to true to override.",
             )
 
-    # Step 4: persist
+    # Combine today's date with the time to create a DateTimeField expected by MongoEngine
+    now = timezone.localtime(timezone.now())
+    scheduled_datetime = datetime.combine(now.date(), reminder_time, tzinfo=timezone.get_current_timezone())
+
     reminder = Reminder.objects.create(
-        user_id=user_id,
+        user_id=str(user_id),
         title=str(title).strip(),
         message=message or "",
-        reminder_time=reminder_time,
-        recurrence_pattern=recurrence_pattern or Reminder.RecurrencePattern.NONE,
-        force_send_in_quiet_hours=force,
+        scheduled_time=scheduled_datetime,
+        repeat_type=recurrence_pattern or "none",
+        status="created",
     )
 
-    # Step 5: schedule Celery task
-    _schedule_reminder_task(reminder)
-
-    logger.info(
-        "[reminder_service] Reminder %s created for user %s at %s (%s).",
-        reminder.id,
-        user_id,
-        reminder_time.strftime("%H:%M"),
-        recurrence_pattern,
+    # Load process_due_reminder as send_reminder_notification to match Celery task naming
+    from ..tasks import process_due_reminder as send_reminder_notification
+    send_reminder_notification.apply_async(
+        args=[str(reminder.id)],
+        eta=scheduled_datetime,
     )
 
     return True, serialize_reminder(reminder), "Reminder created successfully."
-
-
-def _schedule_reminder_task(reminder) -> None:
-    """
-    Compute the next ETA for a reminder and schedule the Celery task.
-    """
-    from datetime import datetime, date, timedelta
-    from django.utils import timezone
-    import logging
-
-    logger = logging.getLogger("team2.services.reminder")
-
-    # Import here to avoid circular imports at module load time
-    from ..tasks import send_reminder_notification
-
-    now = timezone.localtime(timezone.now())
-    today = now.date()
-
-    # Build the candidate ETA for today
-    eta_today = datetime.combine(
-        today,
-        reminder.reminder_time,
-        tzinfo=timezone.get_current_timezone(),
-    )
-
-    if eta_today > now:
-        # Reminder time is still in the future today — schedule for today
-        eta = eta_today
-    else:
-        # Reminder time has already passed today
-        if reminder.recurrence_pattern == "none":
-            # One-time reminder that's already past — skip scheduling
-            logger.warning(
-                "[reminder_service] One-time reminder %s has a past time (%s). "
-                "Task will NOT be scheduled.",
-                reminder.id,
-                reminder.reminder_time.strftime("%H:%M"),
-            )
-            return
-        elif reminder.recurrence_pattern == "daily":
-            eta = eta_today + timedelta(days=1)
-        elif reminder.recurrence_pattern == "weekly":
-            eta = eta_today + timedelta(weeks=1)
-        else:
-            eta = eta_today + timedelta(days=1)
-
-    # Queue the Celery task with the computed ETA
-    send_reminder_notification.apply_async(
-        args=[reminder.id],
-        eta=eta,
-    )
-
-    logger.info(
-        "[reminder_service] Task scheduled for reminder %s (user=%s) at %s.",
-        reminder.id,
-        reminder.user_id,
-        eta.isoformat(),
-    )
-
-
-def reschedule_reminder_task(reminder) -> None:
-    """
-    Cancel the implicit old schedule and create a new one.
-    """
-    _schedule_reminder_task(reminder)
 
 
 def get_user_reminders(user_id: int,
@@ -347,14 +247,14 @@ def get_user_reminders(user_id: int,
     Retrieve all active (non-deleted) reminders for a user.
     """
     queryset = Reminder.objects.filter(
-        user_id=user_id,
+        user_id=str(user_id),
         is_deleted=False,
     )
 
     if not include_completed:
-        queryset = queryset.filter(is_completed=False)
+        queryset = queryset.filter(status__ne="completed")
 
-    queryset = queryset.order_by("reminder_time")
+    queryset = queryset.order_by("scheduled_time")
 
     return [serialize_reminder(r) for r in queryset]
 
@@ -372,8 +272,8 @@ def update_reminder(user_id: int,
     """
     try:
         reminder = Reminder.objects.get(
-            id=reminder_id,
-            user_id=user_id,
+            reminder_id=str(reminder_id), # Query by key 'reminder_id'
+            user_id=str(user_id),
             is_deleted=False,
         )
     except Reminder.DoesNotExist:
@@ -385,9 +285,9 @@ def update_reminder(user_id: int,
 
     new_title = str(title).strip() if title is not None else reminder.title
     new_time_str = reminder_time_str if reminder_time_str is not None \
-        else reminder.reminder_time.strftime("%H:%M")
+        else reminder.scheduled_time.strftime("%H:%M")
     new_pattern = recurrence_pattern if recurrence_pattern is not None \
-        else reminder.recurrence_pattern
+        else reminder.repeat_type
 
     errors = validate_reminder_data(new_title, new_time_str, new_pattern)
     if errors:
@@ -395,7 +295,7 @@ def update_reminder(user_id: int,
 
     new_time, _ = parse_time_string(new_time_str)
 
-    time_changed = (new_time != reminder.reminder_time)
+    time_changed = (new_time != reminder.scheduled_time.time())
     if time_changed and not force:
         conflict, warning = check_quiet_hours_conflict(new_time, user_id)
         if conflict:
@@ -406,22 +306,26 @@ def update_reminder(user_id: int,
                 "Set 'force_send_in_quiet_hours' to true to override.",
             )
 
+    now = timezone.localtime(timezone.now())
+    scheduled_datetime = datetime.combine(now.date(), new_time, tzinfo=timezone.get_current_timezone())
+
     reminder.title = new_title
-    reminder.reminder_time = new_time
-    reminder.recurrence_pattern = new_pattern
+    reminder.scheduled_time = scheduled_datetime
+    reminder.repeat_type = new_pattern
 
     if message is not None:
         reminder.message = message
     if is_active is not None:
-        reminder.is_active = is_active
-    if force:
-        reminder.force_send_in_quiet_hours = True
+        reminder.status = "scheduled" if is_active else "created"
 
     reminder.save()
 
-    # Reschedule the Celery task if the time changed
     if time_changed:
-        reschedule_reminder_task(reminder)
+        from ..tasks import process_due_reminder as send_reminder_notification
+        send_reminder_notification.apply_async(
+            args=[str(reminder.id)],
+            eta=scheduled_datetime,
+        )
 
     return True, serialize_reminder(reminder), "Reminder updated successfully."
 
@@ -433,8 +337,8 @@ def soft_delete_reminder(user_id: int,
     """
     try:
         reminder = Reminder.objects.get(
-            id=reminder_id,
-            user_id=user_id,
+            reminder_id=str(reminder_id),
+            user_id=str(user_id),
             is_deleted=False,
         )
     except Reminder.DoesNotExist:
@@ -445,10 +349,10 @@ def soft_delete_reminder(user_id: int,
         )
 
     reminder.is_deleted = True
-    reminder.is_active = False
-    reminder.save(update_fields=["is_deleted", "is_active", "updated_at"])
+    reminder.status = "expired"
+    reminder.save()
 
-    return True, {"id": reminder_id}, "Reminder deleted successfully."
+    return True, {"id": str(reminder_id)}, "Reminder deleted successfully."
 
 
 def complete_reminder(user_id: int,
@@ -458,8 +362,8 @@ def complete_reminder(user_id: int,
     """
     try:
         reminder = Reminder.objects.get(
-            id=reminder_id,
-            user_id=user_id,
+            reminder_id=str(reminder_id),
+            user_id=str(user_id),
             is_deleted=False,
         )
     except Reminder.DoesNotExist:
@@ -469,24 +373,24 @@ def complete_reminder(user_id: int,
             "Reminder not found or you do not have permission to complete it.",
         )
 
-    if reminder.is_completed:
+    if reminder.status == "completed":
         return (
             False,
             {"is_completed": "This reminder has already been marked as completed."},
             "Reminder is already completed.",
         )
 
-    reminder.is_completed = True
-    reminder.is_active = False
-    reminder.save(update_fields=["is_completed", "is_active", "updated_at"])
+    reminder.status = "completed"
+    reminder.save()
 
-    from django.utils import timezone
-    NotificationLog.objects.create(
-        user_id=user_id,
-        reminder=reminder,
+    # Log into Notification collection using correct MongoEngine fields
+    Notification.objects.create(
+        user_id=str(user_id),
+        reminder_id=str(reminder.id),
+        type="reminder", # Pass the required field
         title=reminder.title,
-        message=f"Reminder '{reminder.title}' was marked as completed by the user.",
-        status=NotificationLog.Status.SENT,
+        content=f"Reminder '{reminder.title}' was marked as completed.", # Map message to content
+        delivery_status="sent", # Map status to delivery_status
         sent_at=timezone.now(),
     )
 
@@ -515,16 +419,13 @@ def update_notification_settings(user_id: int,
     """
     errors = {}
 
-    new_quiet_start = None
-    new_quiet_end = None
-
     if quiet_hours_start_str is not None:
-        new_quiet_start, err = parse_time_string(quiet_hours_start_str)
+        _, err = parse_time_string(quiet_hours_start_str)
         if err:
             errors["quiet_hours_start"] = err
 
     if quiet_hours_end_str is not None:
-        new_quiet_end, err = parse_time_string(quiet_hours_end_str)
+        _, err = parse_time_string(quiet_hours_end_str)
         if err:
             errors["quiet_hours_end"] = err
 
@@ -534,11 +435,11 @@ def update_notification_settings(user_id: int,
     settings = get_or_create_notification_settings(user_id)
 
     if is_enabled is not None:
-        settings.is_enabled = bool(is_enabled)
-    if new_quiet_start is not None:
-        settings.quiet_hours_start = new_quiet_start
-    if new_quiet_end is not None:
-        settings.quiet_hours_end = new_quiet_end
+        settings.push_enabled = bool(is_enabled)
+    if quiet_hours_start_str is not None:
+        settings.dnd_start = quiet_hours_start_str
+    if quiet_hours_end_str is not None:
+        settings.dnd_end = quiet_hours_end_str
 
     settings.save()
 
@@ -547,7 +448,7 @@ def update_notification_settings(user_id: int,
 
 
 # ---------------------------------------------------------------------------
-# Notification Log Services
+# Notification Log Services (Updated for MongoEngine fields)
 # ---------------------------------------------------------------------------
 
 def get_notification_history(user_id: int,
@@ -555,24 +456,21 @@ def get_notification_history(user_id: int,
     """
     Retrieve the user's notification history.
     """
-    valid_statuses = [s.value for s in NotificationLog.Status]
-    if status_filter and status_filter not in valid_statuses:
+    if status_filter and status_filter not in ["pending", "sent", "failed"]:
         return (
             False,
             [],
-            f"Invalid status filter '{status_filter}'. "
-            f"Allowed values: {', '.join(valid_statuses)}.",
+            f"Invalid status filter '{status_filter}'. Allowed values: pending, sent, failed.",
         )
 
-    queryset = NotificationLog.objects.filter(
-        user_id=user_id,
+    queryset = Notification.objects.filter(
+        user_id=str(user_id),
         is_deleted=False,
-    ).select_related("reminder").order_by("-created_at")
+    ).order_by("-created_at")
 
     if status_filter:
-        queryset = queryset.filter(status=status_filter)
+        queryset = queryset.filter(delivery_status=status_filter) # Use correct MongoEngine field
 
     logs = [serialize_notification_log(log) for log in queryset]
 
     return True, logs, "Notification history retrieved successfully."
-

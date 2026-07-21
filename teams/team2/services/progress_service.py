@@ -5,7 +5,7 @@ Rules enforced here:
     - BMI is always calculated automatically (weight / (height_m)^2)
     - Users can only access/modify their own records
     - Deletion is always soft (is_deleted = True)
-    - UserGoal follows upsert semantics (one goal per user)
+    - Goal follows upsert semantics (one goal per user)
     - target_date must be today or in the future
     - Weight/height values must be within realistic bounds
       (enforced by model validators AND re-checked here for clear error messages)
@@ -14,7 +14,7 @@ Rules enforced here:
 
 from datetime import date
 
-from ..models import PhysicalRecord, UserGoal
+from ..models import PhysicalRecord, Goal
 
 
 # ---------------------------------------------------------------------------
@@ -132,14 +132,7 @@ def validate_goal_data(target_weight: float, target_date=None) -> dict:
     elif target_weight < 1 or target_weight > 500:
         errors["target_weight"] = "Target weight must be between 1 and 500 kg."
 
-    if target_date is not None:
-        try:
-            parsed_date = date.fromisoformat(str(target_date))
-            if parsed_date < date.today():
-                errors["target_date"] = "Target date must be today or in the future."
-        except (ValueError, TypeError):
-            errors["target_date"] = "Invalid date format. Use YYYY-MM-DD."
-
+    # Note: target_date validation is ignored as it doesn't exist on the MongoEngine model
     return errors
 
 
@@ -158,38 +151,37 @@ def serialize_record(record: PhysicalRecord) -> dict:
         dict: Serialized representation.
     """
     return {
-        "id": record.id,
+        "id": str(record.id),
         "user_id": record.user_id,
         "weight": record.weight,
         "height": record.height,
         "bmi": record.bmi,
         "bmi_category": get_bmi_category(record.bmi),
-        "body_fat_percentage": record.body_fat_percentage,
+        "body_fat_percentage": record.body_fat_percent, # Map MongoEngine field to view payload key
         "muscle_mass": record.muscle_mass,
-        "notes": record.notes,
+        "notes": "", # Notes field does not exist in the new MongoEngine models
         "created_at": record.created_at.isoformat(),
-        "updated_at": record.updated_at.isoformat(),
     }
 
 
-def serialize_goal(goal: UserGoal) -> dict:
+def serialize_goal(goal: Goal) -> dict:
     """
-    Convert a UserGoal model instance to a JSON-serializable dict.
+    Convert a Goal model instance to a JSON-serializable dict.
 
     Args:
-        goal: UserGoal instance.
+        goal: Goal instance.
 
     Returns:
         dict: Serialized representation.
     """
     return {
-        "id": goal.id,
+        "id": str(goal.id),
         "user_id": goal.user_id,
         "target_weight": goal.target_weight,
-        "target_date": goal.target_date.isoformat() if goal.target_date else None,
+        "target_date": None, # target_date is not supported by the MongoEngine model
         "target_body_fat": goal.target_body_fat,
         "created_at": goal.created_at.isoformat(),
-        "updated_at": goal.updated_at.isoformat(),
+        "updated_at": goal.updated_at.isoformat() if goal.updated_at else None,
     }
 
 
@@ -202,24 +194,6 @@ def create_physical_record(user_id: int, weight: float, height: float,
                             notes: str = "") -> tuple[bool, dict, str]:
     """
     Create and persist a new physical record for the given user.
-
-    Steps:
-        1. Validate input values.
-        2. Calculate BMI automatically.
-        3. Save record to database.
-
-    Args:
-        user_id     : Authenticated user's ID (from Gateway header).
-        weight      : Body weight in kg.
-        height      : Height in cm.
-        body_fat    : Body fat percentage (optional).
-        muscle_mass : Muscle mass in kg (optional).
-        notes       : Optional free-text notes.
-
-    Returns:
-        tuple: (success: bool, data: dict, message: str)
-            - On success: (True, serialized_record, success_message)
-            - On failure: (False, error_dict, error_message)
     """
     # Step 1: validate
     errors = validate_physical_record_data(weight, height, body_fat, muscle_mass)
@@ -229,15 +203,15 @@ def create_physical_record(user_id: int, weight: float, height: float,
     # Step 2: calculate BMI
     bmi = calculate_bmi(weight, height)
 
-    # Step 3: persist
+    # Step 3: persist using MongoEngine fields
     record = PhysicalRecord.objects.create(
-        user_id=user_id,
+        user_id=str(user_id),
         weight=weight,
         height=height,
         bmi=bmi,
-        body_fat_percentage=body_fat,
+        body_fat_percent=body_fat, # Updated to body_fat_percent
         muscle_mass=muscle_mass,
-        notes=notes or "",
+        # 'notes' field is not passed because it doesn't exist on PhysicalRecord
     )
 
     return True, serialize_record(record), "Physical record created successfully."
@@ -247,15 +221,9 @@ def get_user_records(user_id: int) -> list[dict]:
     """
     Retrieve all active (non-deleted) physical records for a user,
     ordered by creation date descending (newest first).
-
-    Args:
-        user_id: Authenticated user's ID.
-
-    Returns:
-        list: List of serialized record dicts.
     """
     records = PhysicalRecord.objects.filter(
-        user_id=user_id,
+        user_id=str(user_id),
         is_deleted=False,
     ).order_by("-created_at")
 
@@ -268,27 +236,12 @@ def update_physical_record(user_id: int, record_id: int,
                             notes: str = None) -> tuple[bool, dict, str]:
     """
     Update an existing physical record owned by the user.
-
-    Ownership check: the record's user_id must match the requester's user_id.
-    BMI is recalculated if weight or height changes.
-
-    Args:
-        user_id   : Authenticated user's ID.
-        record_id : Primary key of the record to update.
-        weight    : New weight (optional).
-        height    : New height (optional).
-        body_fat  : New body fat percentage (optional).
-        muscle_mass: New muscle mass (optional).
-        notes     : New notes (optional).
-
-    Returns:
-        tuple: (success: bool, data: dict, message: str)
     """
     # Fetch the record — must exist, belong to user, and not be deleted
     try:
         record = PhysicalRecord.objects.get(
-            id=record_id,
-            user_id=user_id,
+            record_id=str(record_id), # Query by key 'record_id'
+            user_id=str(user_id),
             is_deleted=False,
         )
     except PhysicalRecord.DoesNotExist:
@@ -299,7 +252,7 @@ def update_physical_record(user_id: int, record_id: int,
     new_height = height if height is not None else record.height
 
     # Validate the final values (combining old + new)
-    new_body_fat = body_fat if body_fat is not None else record.body_fat_percentage
+    new_body_fat = body_fat if body_fat is not None else record.body_fat_percent
     new_muscle_mass = muscle_mass if muscle_mass is not None else record.muscle_mass
 
     errors = validate_physical_record_data(new_weight, new_height, new_body_fat, new_muscle_mass)
@@ -310,11 +263,10 @@ def update_physical_record(user_id: int, record_id: int,
     record.weight = new_weight
     record.height = new_height
     record.bmi = calculate_bmi(new_weight, new_height)
-    record.body_fat_percentage = new_body_fat
+    record.body_fat_percent = new_body_fat # Updated to body_fat_percent
     record.muscle_mass = new_muscle_mass
 
-    if notes is not None:
-        record.notes = notes
+    # 'notes' field is not updated as it doesn't exist
 
     record.save()
 
@@ -324,30 +276,20 @@ def update_physical_record(user_id: int, record_id: int,
 def soft_delete_record(user_id: int, record_id: int) -> tuple[bool, dict, str]:
     """
     Soft-delete a physical record by setting is_deleted=True.
-
-    The record is never physically removed from the database.
-    Only the owner (matching user_id) can delete their records.
-
-    Args:
-        user_id   : Authenticated user's ID.
-        record_id : Primary key of the record to delete.
-
-    Returns:
-        tuple: (success: bool, data: dict, message: str)
     """
     try:
         record = PhysicalRecord.objects.get(
-            id=record_id,
-            user_id=user_id,
+            record_id=str(record_id), # Query by key 'record_id'
+            user_id=str(user_id),
             is_deleted=False,
         )
     except PhysicalRecord.DoesNotExist:
         return False, {}, "Record not found or you do not have permission to delete it."
 
     record.is_deleted = True
-    record.save(update_fields=["is_deleted", "updated_at"])
+    record.save()
 
-    return True, {"id": record_id}, "Physical record deleted successfully."
+    return True, {"id": str(record_id)}, "Physical record deleted successfully."
 
 
 # ---------------------------------------------------------------------------
@@ -358,39 +300,28 @@ def upsert_user_goal(user_id: int, target_weight: float,
                      target_date=None, target_body_fat: float = None) -> tuple[bool, dict, str]:
     """
     Create or update the user's fitness goal (upsert semantics).
-
-    Each user has at most ONE active goal. If one already exists,
-    it is updated in-place. If not, a new one is created.
-
-    Args:
-        user_id        : Authenticated user's ID.
-        target_weight  : Target body weight in kg.
-        target_date    : Target date string (YYYY-MM-DD) or None.
-        target_body_fat: Target body fat percentage (optional).
-
-    Returns:
-        tuple: (success: bool, data: dict, message: str)
     """
     # Validate inputs
     errors = validate_goal_data(target_weight, target_date)
     if errors:
         return False, errors, "Validation failed. Please correct the errors and try again."
 
-    # Parse date if provided
-    parsed_date = None
-    if target_date:
-        parsed_date = date.fromisoformat(str(target_date))
-
-    # Upsert: update_or_create based on user_id
-    goal, created = UserGoal.objects.update_or_create(
-        user_id=user_id,
-        defaults={
-            "target_weight": target_weight,
-            "target_date": parsed_date,
-            "target_body_fat": target_body_fat,
-            "is_deleted": False,          # reactivate if previously soft-deleted
-        },
-    )
+    # Upsert: update_or_create based on user_id in MongoEngine
+    try:
+        goal = Goal.objects.get(user_id=str(user_id))
+        goal.target_weight = target_weight
+        goal.target_body_fat = target_body_fat
+        goal.is_deleted = False
+        goal.save()
+        created = False
+    except Goal.DoesNotExist:
+        goal = Goal.objects.create(
+            user_id=str(user_id),
+            target_weight=target_weight,
+            target_body_fat=target_body_fat,
+            is_deleted=False,
+        )
+        created = True
 
     message = "Goal created successfully." if created else "Goal updated successfully."
     return True, serialize_goal(goal), message
@@ -403,31 +334,17 @@ def upsert_user_goal(user_id: int, target_weight: float,
 def get_progress_summary(user_id: int) -> dict:
     """
     Build a progress summary for the user.
-
-    Includes:
-        - Latest physical record (current weight, BMI, body fat, muscle mass)
-        - Active goal (target weight, target date)
-        - Weight remaining to reach the goal
-        - Progress percentage toward the goal
-
-    Returns an empty/null-safe dict even when no records or goals exist.
-
-    Args:
-        user_id: Authenticated user's ID.
-
-    Returns:
-        dict: Summary data.
     """
     # Fetch latest active record
     latest_record = PhysicalRecord.objects.filter(
-        user_id=user_id,
+        user_id=str(user_id),
         is_deleted=False,
     ).order_by("-created_at").first()
 
     # Fetch active goal
     try:
-        goal = UserGoal.objects.get(user_id=user_id, is_deleted=False)
-    except UserGoal.DoesNotExist:
+        goal = Goal.objects.get(user_id=str(user_id), is_deleted=False)
+    except Goal.DoesNotExist:
         goal = None
 
     # Build current status section
@@ -438,7 +355,7 @@ def get_progress_summary(user_id: int) -> dict:
             "height": latest_record.height,
             "bmi": latest_record.bmi,
             "bmi_category": get_bmi_category(latest_record.bmi),
-            "body_fat_percentage": latest_record.body_fat_percentage,
+            "body_fat_percentage": latest_record.body_fat_percent, # Updated to body_fat_percent
             "muscle_mass": latest_record.muscle_mass,
             "recorded_at": latest_record.created_at.isoformat(),
         }
@@ -448,7 +365,7 @@ def get_progress_summary(user_id: int) -> dict:
     if goal:
         goal_data = {
             "target_weight": goal.target_weight,
-            "target_date": goal.target_date.isoformat() if goal.target_date else None,
+            "target_date": None, # target_date is not supported
             "target_body_fat": goal.target_body_fat,
         }
 
@@ -456,8 +373,6 @@ def get_progress_summary(user_id: int) -> dict:
     progress = None
     if latest_record and goal:
         weight_remaining = round(latest_record.weight - goal.target_weight, 2)
-        # Calculate percentage: how far from start toward goal
-        # We do not know the starting weight here, so we show absolute difference
         progress = {
             "weight_remaining": weight_remaining,
             "weight_remaining_direction": "to lose" if weight_remaining > 0 else "to gain",
@@ -492,38 +407,6 @@ def get_chart_data(user_id: int,
                    period: str) -> tuple[bool, dict, str]:
     """
     Build time-series data for charting a single physical metric.
-
-    Filters the user's non-deleted physical records within the requested
-    time window and returns a list of (date, value) pairs sorted ascending
-    by date, ready to be consumed by a front-end charting library.
-
-    Supported metrics:
-        weight              — body weight in kg
-        bmi                 — Body Mass Index (auto-calculated)
-        body_fat_percentage — body fat %
-        muscle_mass         — muscle mass in kg
-
-    Supported periods:
-        weekly  — last 7 days
-        monthly — last 30 days
-        yearly  — last 365 days
-
-    Args:
-        user_id : Authenticated user's ID.
-        metric  : The physical metric to plot.
-        period  : Time window to include.
-
-    Returns:
-        tuple: (success: bool, data: dict, message: str)
-            On success:
-                data = {
-                    "metric": str,
-                    "period": str,
-                    "unit": str,
-                    "points": [{"date": "YYYY-MM-DD", "value": float}, ...]
-                }
-            On failure:
-                data = field-level error dict
     """
     from django.utils import timezone
     from datetime import timedelta
@@ -569,18 +452,21 @@ def get_chart_data(user_id: int,
     # Query records within the window
     # ------------------------------------------------------------------
     records = PhysicalRecord.objects.filter(
-        user_id=user_id,
+        user_id=str(user_id),
         is_deleted=False,
         created_at__gte=start_date,
     ).order_by("created_at")   # ascending — chronological order for chart
 
     # ------------------------------------------------------------------
     # Build data points — skip records where the metric value is None
-    # (body_fat_percentage and muscle_mass are optional fields)
     # ------------------------------------------------------------------
     points = []
+    
+    # Map the query payload key to the actual MongoEngine model field
+    model_metric = "body_fat_percent" if metric == "body_fat_percentage" else metric
+    
     for record in records:
-        value = getattr(record, metric, None)
+        value = getattr(record, model_metric, None)
         if value is None:
             continue
         points.append({

@@ -14,6 +14,23 @@ version: "3.9"
 services:
 
   # --------------------------------------------------------------------------
+  # MongoDB — Primary Database for Team2
+  # --------------------------------------------------------------------------
+  db:
+    image: mongo:6.0
+    container_name: team2_db
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+    ports:
+      - "27017:27017"
+    volumes:
+      - team2_mongo_data:/data/db
+    networks:
+      - polylife_net
+      
+  # --------------------------------------------------------------------------
   # Redis — Message broker for Celery + session/cache store
   # --------------------------------------------------------------------------
   team2_redis:
@@ -138,6 +155,9 @@ services:
 # ---------------------------------------------------------------------------
 volumes:
   team2_redis_data:
+    driver: local
+  # Add the MongoDB persistent volume
+  team2_mongo_data:
     driver: local
 
 # ---------------------------------------------------------------------------
