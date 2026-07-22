@@ -1,7 +1,7 @@
 from django.db import models
 
 # Your team's data models go here. They live in YOUR database (the core's
-# router routes "team2" models to the "team2" database automatically).
+# router routes "team7" models to the "team7" database automatically).
 #
 # Link rows to the logged-in user by their core id — store the id, do NOT add a
 # ForeignKey to the core User (it lives in a different database).

@@ -17,12 +17,12 @@ ALLOWED_HOSTS = os.environ.get(
 
 INSTALLED_APPS = [
     "django.contrib.staticfiles",
-    "teams.team7.apps.TeamConfig",
+    "teams.team2.apps.TeamConfig",
 ]
 
 MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
-    "teams.team7.middleware.GatewayUserMiddleware",
+    "teams.team2.middleware.GatewayUserMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"

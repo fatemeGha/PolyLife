@@ -5,11 +5,11 @@ The suite uses mongomock instead of a real MongoDB server and replaces
 external integrations such as Redis, Celery, and Firebase with small fakes.
 It covers the public service API as well as important internal helper branches.
 
-Run from inside teams/team7 with:
+Run from inside teams/team2 with:
     python -m unittest tests.test_services -v
 
 Run from the repository root with:
-    python -m unittest teams.team7.tests.test_services -v
+    python -m unittest teams.team2.tests.test_services -v
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def _connect_test_db():
     """Connect MongoEngine to an isolated in-memory mongomock database."""
     mongoengine.disconnect()
     mongoengine.connect(
-        db="team7_services_test",
+        db="team2_services_test",
         host="mongodb://localhost",
         mongo_client_class=mongomock.MongoClient,
         uuidRepresentation="standard",

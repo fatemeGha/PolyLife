@@ -19,6 +19,6 @@ app = Celery("config")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 
 # Auto-discover a tasks.py inside every app listed in INSTALLED_APPS -
-# this is what picks up teams/team7/tasks.py without needing to import
+# this is what picks up teams/team2/tasks.py without needing to import
 # it manually anywhere.
 app.autodiscover_tasks()

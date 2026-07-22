@@ -7,7 +7,7 @@ from mongoengine.connection import get_connection
 
 class TeamConfig(AppConfig):
     """
-    Django application configuration for team7.
+    Django application configuration for team2.
 
     Establishes the default MongoEngine connection when Django starts.
     """
@@ -37,7 +37,7 @@ class TeamConfig(AppConfig):
             get_connection(alias="default")
         except mongoengine.ConnectionFailure:
             mongoengine.connect(
-                db="team7_db",
+                db="team2_db",
                 host=database_url,
                 alias="default",
                 uuidRepresentation="standard",

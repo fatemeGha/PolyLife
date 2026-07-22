@@ -14,8 +14,8 @@ from celery.exceptions import Retry
 
 # Support both common execution styles:
 #   1) From the repository root:
-#      python -m unittest teams.team7.tests.test_tasks -v
-#   2) From inside teams/team7:
+#      python -m unittest teams.team2.tests.test_tasks -v
+#   2) From inside teams/team2:
 #      python -m unittest tests.test_tasks -v
 if __package__ in (None, "", "tests"):
     import tasks
@@ -35,7 +35,7 @@ class ProcessDueReminderTaskTests(unittest.TestCase):
         """
         task = tasks.process_due_reminder
 
-        self.assertEqual(task.name, "team7.process_due_reminder")
+        self.assertEqual(task.name, "team2.process_due_reminder")
         self.assertEqual(task.max_retries, 3)
 
     @patch.object(tasks.services, "process_due_reminder")

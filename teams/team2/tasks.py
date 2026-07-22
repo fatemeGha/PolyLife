@@ -12,7 +12,7 @@ from celery import shared_task
 from . import services
 
 
-@shared_task(name="team7.process_due_reminder", bind=True, max_retries=3)
+@shared_task(name="team2.process_due_reminder", bind=True, max_retries=3)
 def process_due_reminder(self, reminder_id: str):
     """
     Fired by Reminder.schedule() with an ETA equal to the reminder's

@@ -3,10 +3,10 @@ from django.http import JsonResponse
 
 
 def health(request):
-    return JsonResponse({"status": "team7 backend is up"})
+    return JsonResponse({"status": "team2 backend is up"})
 
 
 urlpatterns = [
     path("", health),
-    path("api/", include("teams.team7.urls")),
+    path("api/", include("teams.team2.urls")),
 ]

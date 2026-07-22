@@ -39,7 +39,7 @@ ALL_MODELS = (
 def _connect_test_db():
     mongoengine.disconnect(alias="default")
     mongoengine.connect(
-        db="team7_test",
+        db="team2_test",
         alias="default",
         host="mongodb://localhost",
         mongo_client_class=mongomock.MongoClient,

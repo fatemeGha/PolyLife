@@ -10,7 +10,7 @@ def whoami(request):
     """
     return JsonResponse(
         {
-            "team": "team2",
+            "team": "team7",
             "user_id": request.headers.get("X-User-Id", ""),
             "username": request.headers.get("X-User-Username", ""),
         }

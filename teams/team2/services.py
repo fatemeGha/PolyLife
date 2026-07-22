@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import mongoengine as me
 from dateutil.relativedelta import relativedelta
 
-try:  # Package execution: teams.team7.services
+try:  # Package execution: teams.team2.services
     from .models import (
         DeviceToken,
         EventSubscription,
@@ -31,7 +31,7 @@ try:  # Package execution: teams.team7.services
         WorkoutSession,
         utc_now,
     )
-except ImportError:  # Direct execution from inside teams/team7
+except ImportError:  # Direct execution from inside teams/team2
     from models import (  # type: ignore
         DeviceToken,
         EventSubscription,
@@ -45,7 +45,7 @@ except ImportError:  # Direct execution from inside teams/team7
         utc_now,
     )
 
-logger = logging.getLogger("team7")
+logger = logging.getLogger("team2")
 
 _UNSET = object()
 _ALLOWED_PERIODS = {"week": 7, "month": 30, "year": 365}
