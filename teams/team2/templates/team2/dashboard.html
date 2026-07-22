@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#185e64">
     <title>PolyLife | Progress Dashboard</title>
-    <link rel="stylesheet" href="..\..\static\team2\css\dashboard.css">
+    <link rel="stylesheet" href="{% static 'team2/css/dashboard.css' %}">
 </head>
 <body
     data-api-base="/api/team2"
@@ -263,6 +263,6 @@
     </div>
 
     <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
-    <script src="..\..\static\team2\js\dashboard.js" defer></script>
+    <script src="{% static 'team2/js/dashboard.js' %}" defer></script>
 </body>
 </html>

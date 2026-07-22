@@ -133,7 +133,7 @@ urlpatterns = [
     # ------------------------------------------------------------------
     path(
         "dashboard/",
-        TemplateView.as_view(template_name="./templates/team2/dashboard.html"),
+        TemplateView.as_view(template_name="team2/dashboard.html"),
         name="dashboard",
     ),
 ]
