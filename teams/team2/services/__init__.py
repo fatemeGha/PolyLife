@@ -6,7 +6,7 @@ No source file is dynamically executed here.
 """
 
 __all__ = (
-    "legacy_service",
+    "legacy_services",
     "progress_service",
     "reminder_service",
 )

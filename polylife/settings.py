@@ -32,6 +32,7 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.
 # Team microservices mounted by the core. Empty until teams are implemented;
 # the /api/microservices endpoint then falls back to decoy placeholders.
 TEAM_APPS = env.list("TEAM_APPS", default=[])
+TEAM_APPS.append("teams.team2.apps.TeamConfig")
 
 
 # Application definition
