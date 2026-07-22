@@ -34,6 +34,8 @@ Route summary:
 from django.urls import path
 from . import views
 
+from django.views.generic import TemplateView
+
 app_name = "team2"
 
 urlpatterns = [
@@ -124,5 +126,14 @@ urlpatterns = [
         "trainer/users/<int:student_id>/progress/",
         views.trainer_student_progress,
         name="trainer-student-progress",
+    ),
+
+    # ------------------------------------------------------------------
+    # Front
+    # ------------------------------------------------------------------
+    path(
+        "dashboard/",
+        TemplateView.as_view(template_name="./templates/team2/dashboard.html"),
+        name="dashboard",
     ),
 ]

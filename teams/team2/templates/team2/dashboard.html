@@ -1,0 +1,268 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#185e64">
+    <title>PolyLife | Progress Dashboard</title>
+    <link rel="stylesheet" href="..\..\static\team2\css\dashboard.css">
+</head>
+<body
+    data-api-base="/api/team2"
+    data-user-id="{{ request.user_info.user_id|default:'1' }}"
+    data-username="{{ request.user_info.username|default:'demo-user' }}"
+>
+    <section class="welcome-screen" id="welcomeScreen" aria-labelledby="welcomeTitle">
+        <div class="welcome-orb welcome-orb--one"></div>
+        <div class="welcome-orb welcome-orb--two"></div>
+        <div class="welcome-content">
+            <div class="welcome-brand"><span>Poly</span>Life</div>
+            <p class="eyebrow">YOUR PROGRESS, BEAUTIFULLY TRACKED</p>
+            <h1 id="welcomeTitle">The secret of <em>getting ahead</em><br>is getting started.</h1>
+            <p class="welcome-copy">Small steps become strong habits. Track the work, see the change, and keep moving.</p>
+            <button class="primary-button welcome-button" id="getStartedButton" type="button">
+                Get Started
+                <span aria-hidden="true">→</span>
+            </button>
+        </div>
+        <div class="welcome-progress" aria-hidden="true"><span></span><span></span><span></span></div>
+    </section>
+
+    <main class="app-shell is-hidden" id="appShell">
+        <header class="app-header">
+            <a class="brand" href="#" aria-label="PolyLife dashboard"><span>Poly</span>Life</a>
+            <div class="header-copy">
+                <span class="eyebrow">PROGRESS DASHBOARD</span>
+                <h1>Build the life you want.</h1>
+            </div>
+            <div class="header-actions">
+                <div class="today-label"><span id="todayWeekday">Today</span><strong id="todayDate"></strong></div>
+                <button class="icon-button" id="notificationButton" type="button" aria-label="Enable reminder notifications" title="Enable notifications">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
+                    <span class="notification-dot" id="notificationDot"></span>
+                </button>
+            </div>
+        </header>
+
+        <div class="dashboard-layout">
+            <aside class="sidebar">
+                <section class="panel calendar-card" aria-labelledby="calendarMonth">
+                    <div class="panel-header calendar-header">
+                        <div>
+                            <span class="section-kicker">SCHEDULE</span>
+                            <h2 id="calendarMonth"></h2>
+                        </div>
+                        <div class="calendar-nav">
+                            <button class="mini-icon-button" id="previousMonth" type="button" aria-label="Previous month">‹</button>
+                            <button class="mini-icon-button" id="nextMonth" type="button" aria-label="Next month">›</button>
+                        </div>
+                    </div>
+                    <div class="calendar-weekdays" aria-hidden="true">
+                        <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+                    </div>
+                    <div class="calendar-grid" id="calendarGrid" role="grid" aria-label="Reminder calendar"></div>
+                    <p class="calendar-help">Select a day to add a reminder.</p>
+                </section>
+
+                <section class="panel reminders-card" aria-labelledby="reminderHeading">
+                    <div class="panel-header">
+                        <div>
+                            <span class="section-kicker">UP NEXT</span>
+                            <h2 id="reminderHeading">Reminders</h2>
+                        </div>
+                        <span class="count-badge" id="reminderCount">0</span>
+                    </div>
+                    <div class="reminder-list scroll-region" id="reminderList"></div>
+                    <div class="empty-state compact is-hidden" id="reminderEmpty">
+                        <span class="empty-icon">✓</span>
+                        <strong>Your schedule is clear</strong>
+                        <p>Choose a calendar day to add a reminder.</p>
+                    </div>
+                </section>
+            </aside>
+
+            <section class="workspace">
+                <nav class="tab-list" aria-label="Dashboard sections">
+                    <button class="tab-button is-active" data-tab="statistics" type="button">Statistics</button>
+                    <button class="tab-button" data-tab="analytics" type="button">Analytics</button>
+                </nav>
+
+                <section class="tab-panel" id="statisticsPanel" data-panel="statistics">
+                    <div class="summary-grid">
+                        <article class="summary-card summary-card--primary">
+                            <span class="summary-label">Current weight</span>
+                            <div><strong id="currentWeight">—</strong><span>kg</span></div>
+                            <small id="weightChange">Add a record to begin</small>
+                        </article>
+                        <article class="summary-card">
+                            <span class="summary-label">Body mass index</span>
+                            <div><strong id="currentBmi">—</strong><span>BMI</span></div>
+                            <small id="bmiCategory">No data yet</small>
+                        </article>
+                        <article class="summary-card">
+                            <span class="summary-label">Body fat</span>
+                            <div><strong id="currentBodyFat">—</strong><span>%</span></div>
+                            <small>Latest measurement</small>
+                        </article>
+                        <article class="summary-card">
+                            <span class="summary-label">Muscle mass</span>
+                            <div><strong id="currentMuscle">—</strong><span>kg</span></div>
+                            <small>Latest measurement</small>
+                        </article>
+                    </div>
+
+                    <section class="panel records-panel" aria-labelledby="recordsHeading">
+                        <div class="panel-header records-heading">
+                            <div>
+                                <span class="section-kicker">MEASUREMENTS</span>
+                                <h2 id="recordsHeading">Physical records</h2>
+                            </div>
+                            <button class="primary-button small-button" id="addRecordButton" type="button"><span aria-hidden="true">＋</span> New record</button>
+                        </div>
+                        <div class="table-wrap">
+                            <table class="records-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th><th>Weight</th><th>Height</th><th>BMI</th><th>Body fat</th><th>Muscle</th><th><span class="sr-only">Actions</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recordsBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="empty-state is-hidden" id="recordsEmpty">
+                            <span class="empty-icon">↗</span>
+                            <strong>No measurements yet</strong>
+                            <p>Your first record will unlock progress analytics.</p>
+                            <button class="text-button" id="emptyAddRecordButton" type="button">Add the first record →</button>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="tab-panel is-hidden" id="analyticsPanel" data-panel="analytics">
+                    <div class="analytics-toolbar">
+                        <div>
+                            <span class="section-kicker">YOUR EVOLUTION</span>
+                            <h2>Progress analytics</h2>
+                        </div>
+                        <div class="analytics-filters">
+                            <label>Metric
+                                <select id="metricSelect">
+                                    <option value="weight">Weight</option>
+                                    <option value="bmi">BMI</option>
+                                    <option value="body_fat_percentage">Body fat</option>
+                                    <option value="muscle_mass">Muscle mass</option>
+                                </select>
+                            </label>
+                            <label>Period
+                                <select id="periodSelect">
+                                    <option value="weekly">7 days</option>
+                                    <option value="monthly" selected>30 days</option>
+                                    <option value="yearly">1 year</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="analytics-grid">
+                        <article class="panel chart-card">
+                            <div class="chart-header">
+                                <div><span id="chartMetricLabel">Weight</span><strong id="chartLatest">—</strong></div>
+                                <span class="trend-pill" id="chartTrend">No trend yet</span>
+                            </div>
+                            <div class="chart-area" id="chartArea">
+                                <svg id="progressChart" viewBox="0 0 800 360" role="img" aria-label="Progress line chart"></svg>
+                                <div class="empty-state chart-empty is-hidden" id="chartEmpty">
+                                    <strong>More data makes a better story</strong>
+                                    <p>Add measurements to see your trend.</p>
+                                </div>
+                            </div>
+                        </article>
+
+                        <aside class="analytics-aside">
+                            <article class="bmi-card" id="bmiCard">
+                                <span class="section-kicker">LATEST BMI</span>
+                                <strong id="analyticsBmi">—</strong>
+                                <span id="analyticsBmiCategory">No measurement</span>
+                                <div class="bmi-scale" aria-hidden="true"><i></i></div>
+                                <div class="bmi-labels"><small>Under</small><small>Healthy</small><small>Over</small></div>
+                            </article>
+                            <article class="panel insight-card">
+                                <span class="section-kicker">INSIGHT</span>
+                                <p id="analyticsInsight">Add at least two records to receive a progress insight.</p>
+                            </article>
+                        </aside>
+                    </div>
+                </section>
+            </section>
+        </div>
+    </main>
+
+    <div class="modal-backdrop is-hidden" id="reminderModal" role="dialog" aria-modal="true" aria-labelledby="reminderModalTitle">
+        <div class="modal-card">
+            <button class="modal-close" type="button" data-close-modal="reminderModal" aria-label="Close">×</button>
+            <span class="section-kicker">PLAN YOUR DAY</span>
+            <h2 id="reminderModalTitle">Add a reminder</h2>
+            <p class="modal-subtitle" id="selectedReminderDate"></p>
+            <form id="reminderForm">
+                <div class="form-row">
+                    <label>Hour<input id="reminderHour" type="number" min="0" max="23" inputmode="numeric" placeholder="09" required></label>
+                    <span class="time-separator">:</span>
+                    <label>Minute<input id="reminderMinute" type="number" min="0" max="59" inputmode="numeric" placeholder="30" required></label>
+                    <label class="recurrence-field">Repeat<select id="reminderRecurrence"><option value="none">Never</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></label>
+                </div>
+                <label>Message<textarea id="reminderMessage" rows="4" maxlength="180" placeholder="What would you like to remember?" required></textarea></label>
+                <p class="form-error" id="reminderFormError" role="alert"></p>
+                <button class="primary-button modal-submit" type="submit">Save reminder</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-backdrop is-hidden" id="recordModal" role="dialog" aria-modal="true" aria-labelledby="recordModalTitle">
+        <div class="modal-card modal-card--wide">
+            <button class="modal-close" type="button" data-close-modal="recordModal" aria-label="Close">×</button>
+            <span class="section-kicker">TRACK A CHECK-IN</span>
+            <h2 id="recordModalTitle">New physical record</h2>
+            <p class="modal-subtitle">Use your latest measurements for accurate analytics.</p>
+            <form id="recordForm">
+                <div class="form-grid">
+                    <label>Weight <span>(kg)</span><input id="recordWeight" type="number" min="20" max="400" step="0.1" placeholder="72.5" required></label>
+                    <label>Height <span>(cm)</span><input id="recordHeight" type="number" min="80" max="260" step="0.1" placeholder="175" required></label>
+                    <label>Body fat <span>(%)</span><input id="recordBodyFat" type="number" min="1" max="75" step="0.1" placeholder="18.0"></label>
+                    <label>Muscle mass <span>(kg)</span><input id="recordMuscle" type="number" min="1" max="250" step="0.1" placeholder="32.0"></label>
+                </div>
+                <label>Note <span>(optional)</span><input id="recordNotes" type="text" maxlength="240" placeholder="Morning check-in"></label>
+                <p class="form-error" id="recordFormError" role="alert"></p>
+                <button class="primary-button modal-submit" type="submit">Add record</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-backdrop is-hidden" id="confirmModal" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle">
+        <div class="modal-card confirm-card">
+            <span class="confirm-symbol">!</span>
+            <h2 id="confirmTitle">Remove this item?</h2>
+            <p id="confirmMessage">This action cannot be undone.</p>
+            <div class="confirm-actions">
+                <button class="secondary-button" id="confirmCancel" type="button">Keep it</button>
+                <button class="danger-button" id="confirmAccept" type="button">Remove</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop is-hidden" id="quietHoursModal" role="alertdialog" aria-modal="true" aria-labelledby="quietHoursTitle">
+        <div class="modal-card confirm-card">
+            <span class="confirm-symbol confirm-symbol--moon">☾</span>
+            <h2 id="quietHoursTitle">This is inside quiet hours</h2>
+            <p>The reminder can still be saved if you choose to override your notification settings.</p>
+            <div class="confirm-actions">
+                <button class="secondary-button" id="quietHoursCancel" type="button">Change time</button>
+                <button class="primary-button" id="quietHoursAccept" type="button">Save anyway</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
+    <script src="..\..\static\team2\js\dashboard.js" defer></script>
+</body>
+</html>
