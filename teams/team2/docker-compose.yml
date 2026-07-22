@@ -21,8 +21,8 @@ services:
     container_name: team2_db
     restart: unless-stopped
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - MONGO_INITDB_ROOT_USERNAME=${team2_user}
+      - MONGO_INITDB_ROOT_PASSWORD=${team2_pass}
     ports:
       - "27017:27017"
     volumes:
@@ -86,7 +86,7 @@ services:
     container_name: team2_worker
     restart: unless-stopped
     command: >
-      celery -A teams.team2.celery_app worker
+      celery -A config worker
         --loglevel=info
         --concurrency=4
         --queues=team2_reminders,celery
@@ -116,7 +116,7 @@ services:
     container_name: team2_beat
     restart: unless-stopped
     command: >
-      celery -A teams.team2.celery_app beat
+      celery -A config beat
         --loglevel=info
         --scheduler django_celery_beat.schedulers:DatabaseScheduler
     env_file:

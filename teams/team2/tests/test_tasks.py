@@ -38,7 +38,7 @@ class ProcessDueReminderTaskTests(unittest.TestCase):
         self.assertEqual(task.name, "team2.process_due_reminder")
         self.assertEqual(task.max_retries, 3)
 
-    @patch.object(tasks.services, "process_due_reminder")
+    @patch.object(tasks.legacy_services, "process_due_reminder")
     def test_success_delegates_to_service_once(self, mock_service):
         """
         Delegate a successful task execution to services.py exactly once.
@@ -50,7 +50,7 @@ class ProcessDueReminderTaskTests(unittest.TestCase):
         mock_service.assert_called_once_with("reminder-123")
         self.assertIsNone(result)
 
-    @patch.object(tasks.services, "process_due_reminder")
+    @patch.object(tasks.legacy_services, "process_due_reminder")
     def test_service_result_is_not_exposed_as_task_result(self, mock_service):
         """
         Keep the task interface independent from the service return value.
@@ -63,7 +63,7 @@ class ProcessDueReminderTaskTests(unittest.TestCase):
 
         self.assertIsNone(result)
 
-    @patch.object(tasks.services, "process_due_reminder")
+    @patch.object(tasks.legacy_services, "process_due_reminder")
     def test_failure_requests_retry_with_original_exception(self, mock_service):
         """
         Retry transient failures with the original exception and a five-second delay.
@@ -85,7 +85,7 @@ class ProcessDueReminderTaskTests(unittest.TestCase):
             countdown=5,
         )
 
-    @patch.object(tasks.services, "process_due_reminder")
+    @patch.object(tasks.legacy_services, "process_due_reminder")
     def test_retry_is_requested_for_any_exception_type(self, mock_service):
         """
         Confirm that any service-layer exception follows the retry path.

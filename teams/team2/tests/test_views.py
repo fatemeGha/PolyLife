@@ -27,9 +27,9 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import PhysicalRecord, UserGoal, Reminder, NotificationSetting, NotificationLog
-from .services.progress_service import calculate_bmi, get_bmi_category, get_chart_data
-from .services.reminder_service import (
+from ..models import PhysicalRecord, UserGoal, Reminder, NotificationSetting, NotificationLog
+from ..services.progress_service import calculate_bmi, get_bmi_category, get_chart_data
+from ..services.reminder_service import (
     is_in_quiet_hours,
     create_reminder,
     soft_delete_reminder,
@@ -157,7 +157,7 @@ class BMICalculationTests(TestCase):
         """
         When weight changes via the service, BMI should be recalculated.
         """
-        from .services.progress_service import update_physical_record
+        from ..services.progress_service import update_physical_record
 
         record = make_physical_record(weight=80.0, height=175.0)
         original_bmi = record.bmi
@@ -448,7 +448,7 @@ class SoftDeleteReminderTests(TestCase):
         """
         get_user_reminders() must exclude soft-deleted reminders.
         """
-        from .services.reminder_service import get_user_reminders
+        from ..services.reminder_service import get_user_reminders
 
         # Create a second reminder to ensure list is not empty after deletion
         make_reminder(user_id=self.user_id, title="Evening Walk", reminder_time=time(18, 0))
@@ -736,7 +736,7 @@ class GoalUpsertTests(TestCase):
         """
         First call to upsert_user_goal() creates a UserGoal in the DB.
         """
-        from .services.progress_service import upsert_user_goal
+        from ..services.progress_service import upsert_user_goal
 
         success, data, _ = upsert_user_goal(
             user_id=self.user_id,
@@ -749,7 +749,7 @@ class GoalUpsertTests(TestCase):
         """
         Second call updates the existing goal — no duplicate rows created.
         """
-        from .services.progress_service import upsert_user_goal
+        from ..services.progress_service import upsert_user_goal
 
         upsert_user_goal(user_id=self.user_id, target_weight=75.0)
         upsert_user_goal(user_id=self.user_id, target_weight=70.0)
@@ -765,7 +765,7 @@ class GoalUpsertTests(TestCase):
         """
         target_date set to yesterday must be rejected by the service.
         """
-        from .services.progress_service import upsert_user_goal
+        from ..services.progress_service import upsert_user_goal
 
         yesterday = (date.today() - timedelta(days=1)).isoformat()
         success, data, _ = upsert_user_goal(
@@ -780,7 +780,7 @@ class GoalUpsertTests(TestCase):
         """
         target_date set to a future date must be accepted.
         """
-        from .services.progress_service import upsert_user_goal
+        from ..services.progress_service import upsert_user_goal
 
         future_date = (date.today() + timedelta(days=90)).isoformat()
         success, data, _ = upsert_user_goal(

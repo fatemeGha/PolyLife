@@ -9,8 +9,7 @@ without needing a running Celery worker or broker.
 
 from celery import shared_task
 
-from . import services
-
+from .services import legacy_services
 
 @shared_task(name="team2.process_due_reminder", bind=True, max_retries=3)
 def process_due_reminder(self, reminder_id: str):
@@ -31,6 +30,6 @@ def process_due_reminder(self, reminder_id: str):
     the reminder.
     """
     try:
-        services.process_due_reminder(reminder_id)
+        legacy_services.process_due_reminder(reminder_id)
     except Exception as exc:  # noqa: BLE001 - retry on any transient failure
         raise self.retry(exc=exc, countdown=5)

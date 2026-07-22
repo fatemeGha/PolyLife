@@ -22,7 +22,6 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
-    "teams.team2.middleware.GatewayUserMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"

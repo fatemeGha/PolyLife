@@ -18,32 +18,18 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import mongoengine as me
 from dateutil.relativedelta import relativedelta
 
-try:  # Package execution: teams.team2.services
-    from .models import (
-        DeviceToken,
-        EventSubscription,
-        Goal,
-        Notification,
-        NotificationSettings,
-        PersonalBest,
-        PhysicalRecord,
-        Reminder,
-        WorkoutSession,
-        utc_now,
-    )
-except ImportError:  # Direct execution from inside teams/team2
-    from models import (  # type: ignore
-        DeviceToken,
-        EventSubscription,
-        Goal,
-        Notification,
-        NotificationSettings,
-        PersonalBest,
-        PhysicalRecord,
-        Reminder,
-        WorkoutSession,
-        utc_now,
-    )
+from ..models import (
+    DeviceToken,
+    EventSubscription,
+    Goal,
+    Notification,
+    NotificationSettings,
+    PersonalBest,
+    PhysicalRecord,
+    Reminder,
+    WorkoutSession,
+    utc_now,
+)
 
 logger = logging.getLogger("team2")
 
@@ -745,10 +731,8 @@ def _channel_enabled(channel: str, settings: NotificationSettings) -> bool:
 
 def _get_process_due_task():
     """Import the Celery task without assuming one execution layout."""
-    try:
-        from .tasks import process_due_reminder as task
-    except ImportError:
-        from tasks import process_due_reminder as task  # type: ignore
+    from ..tasks import process_due_reminder as task
+    
     return task
 
 

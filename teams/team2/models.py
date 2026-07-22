@@ -470,7 +470,7 @@ class Notification(me.Document):
 
     def send(self, sender: Optional[Callable[..., object]] = None) -> "Notification":
         if sender is None:
-            from .services import send_push_notification as sender
+            from .services.legacy_services import send_push_notification as sender
         try:
             result = sender(
                 user_id=self.user_id,

@@ -41,7 +41,7 @@ if __package__ in (None, "", "tests"):
         utc_now,
     )
 else:
-    from .. import services
+    from ..services import legacy_services as services
     from ..models import (
         DeviceToken,
         EventSubscription,
