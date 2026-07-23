@@ -8,6 +8,8 @@ from .services.risk_service import analyze_group_risk
 from django.test import SimpleTestCase
 from datetime import time
 from .services.matching_service import recommend_groups
+from rest_framework.test import APIRequestFactory
+from .views import HealthView, ProfileView
 
 from .models import (
     FitnessLevel,
@@ -899,3 +901,183 @@ class MembershipServiceTests(SimpleTestCase):
             update_fields=["status"]
         )
         self.assertEqual(result, membership)
+class ProfileViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+        self.gateway_headers = {
+            "HTTP_X_USER_ID": "15",
+            "HTTP_X_USER_USERNAME": "murteza",
+        }
+
+    def test_health_endpoint_returns_success(self):
+        request = self.factory.get("/health")
+
+        response = HealthView.as_view()(request)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertTrue(response.data["success"])
+        self.assertEqual(
+            response.data["data"]["status"],
+            "healthy",
+        )
+
+    def test_profile_requires_gateway_headers(self):
+        request = self.factory.get("/profile")
+
+        response = ProfileView.as_view()(request)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+        self.assertFalse(response.data["success"])
+        self.assertEqual(
+            response.data["error"]["code"],
+            "AUTH_HEADERS_MISSING",
+        )
+
+    @patch("teams.team6.views.UserProfileReadSerializer")
+    @patch("teams.team6.views._get_profile")
+    def test_get_profile_returns_profile_data(
+        self,
+        mock_get_profile,
+        mock_read_serializer,
+    ):
+        profile = SimpleNamespace(
+            id=3,
+            core_user_id=15,
+        )
+
+        mock_get_profile.return_value = profile
+        mock_read_serializer.return_value.data = {
+            "id": 3,
+            "core_user_id": 15,
+            "age": 24,
+            "height": 175.0,
+            "weight": 72.5,
+            "fitness_level": FitnessLevel.BEGINNER,
+        }
+
+        request = self.factory.get(
+            "/profile",
+            **self.gateway_headers,
+        )
+
+        response = ProfileView.as_view()(request)
+
+        mock_get_profile.assert_called_once_with(15)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            response.data["data"]["profile"]["id"],
+            3,
+        )
+
+    @patch("teams.team6.views.UserProfile.objects.filter")
+    def test_duplicate_profile_is_rejected(
+        self,
+        mock_filter,
+    ):
+        mock_filter.return_value.exists.return_value = True
+
+        request = self.factory.post(
+            "/profile",
+            {},
+            format="json",
+            **self.gateway_headers,
+        )
+
+        response = ProfileView.as_view()(request)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_409_CONFLICT,
+        )
+        self.assertEqual(
+            response.data["error"]["code"],
+            "PROFILE_ALREADY_EXISTS",
+        )
+
+    @patch("teams.team6.views.UserProfile.objects.filter")
+    def test_invalid_profile_data_is_rejected(
+        self,
+        mock_filter,
+    ):
+        mock_filter.return_value.exists.return_value = False
+
+        request = self.factory.post(
+            "/profile",
+            {},
+            format="json",
+            **self.gateway_headers,
+        )
+
+        response = ProfileView.as_view()(request)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertEqual(
+            response.data["error"]["code"],
+            "VALIDATION_ERROR",
+        )
+
+    @patch("teams.team6.views._get_profile")
+    def test_empty_patch_is_rejected(
+        self,
+        mock_get_profile,
+    ):
+        mock_get_profile.return_value = SimpleNamespace(
+            id=3,
+            core_user_id=15,
+        )
+
+        request = self.factory.patch(
+            "/profile",
+            {},
+            format="json",
+            **self.gateway_headers,
+        )
+
+        response = ProfileView.as_view()(request)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertEqual(
+            response.data["error"]["code"],
+            "VALIDATION_ERROR",
+        )
+
+    @patch("teams.team6.views._get_profile")
+    def test_delete_profile_returns_success(
+        self,
+        mock_get_profile,
+    ):
+        profile = MagicMock()
+        mock_get_profile.return_value = profile
+
+        request = self.factory.delete(
+            "/profile",
+            **self.gateway_headers,
+        )
+
+        response = ProfileView.as_view()(request)
+
+        profile.delete.assert_called_once_with()
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertTrue(response.data["success"])
+        self.assertEqual(response.data["data"], {})

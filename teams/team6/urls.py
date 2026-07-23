@@ -1,10 +1,19 @@
 from django.urls import path
 
-from . import views
+from .views import HealthView, ProfileView
+
 
 app_name = "team6"
 
 urlpatterns = [
-    path("api/whoami", views.whoami, name="whoami"),
-    # Add your team's routes here.
+    path(
+        "health",
+        HealthView.as_view(),
+        name="health",
+    ),
+    path(
+        "profile",
+        ProfileView.as_view(),
+        name="profile",
+    ),
 ]
