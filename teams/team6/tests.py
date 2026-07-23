@@ -2,7 +2,8 @@ from rest_framework import status
 from types import SimpleNamespace
 from .exceptions import GroupNotFoundError
 from .responses import error_response, success_response
-from unittest.mock import patch
+from contextlib import nullcontext
+from unittest.mock import MagicMock, patch
 from .services.risk_service import analyze_group_risk
 from django.test import SimpleTestCase
 from datetime import time
@@ -14,11 +15,23 @@ from .models import (
     WorkoutType,
     DifficultyLevel,
     RiskLevel,
+    MembershipStatus,
 )
 from .serializers import (
     GroupRecommendationRequestSerializer,
     UserProfileWriteSerializer,
     WorkoutPreferenceSerializer,
+)
+
+from .exceptions import (
+    AlreadyMemberError,
+    GroupFullError,
+    GroupNotFoundError,
+    HighRiskGroupError,
+)
+from .services.membership_service import (
+    join_group,
+    leave_group,
 )
 
 
@@ -644,3 +657,245 @@ class MatchingServiceTests(SimpleTestCase):
 
         self.assertEqual(results, [])
         mock_risk_analysis.assert_not_called()
+class MembershipServiceTests(SimpleTestCase):
+    def test_user_can_join_safe_group(self):
+        user = SimpleNamespace(id=1)
+
+        group = SimpleNamespace(
+            id=7,
+            pk=7,
+            max_members=15,
+        )
+
+        membership = SimpleNamespace(
+            id=4,
+            status=MembershipStatus.ACTIVE,
+        )
+
+        safe_risk = {
+            "group_id": 7,
+            "score": 20,
+            "level": RiskLevel.LOW,
+            "is_safe": True,
+            "reasons": [],
+            "recommendation": (
+                "This group is suitable for the user."
+            ),
+        }
+
+        with (
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "_get_existing_membership",
+                side_effect=[None, None],
+            ),
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "_get_active_member_count",
+                side_effect=[5, 5],
+            ),
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "analyze_group_risk",
+                return_value=safe_risk,
+            ),
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "_lock_group",
+                return_value=group,
+            ),
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "GroupMembership.objects.create",
+                return_value=membership,
+            ) as mock_create,
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "transaction.atomic",
+                return_value=nullcontext(),
+            ),
+        ):
+            result = join_group(
+                user=user,
+                group=group,
+            )
+
+        mock_create.assert_called_once_with(
+            user=user,
+            group=group,
+            status=MembershipStatus.ACTIVE,
+        )
+
+        self.assertEqual(
+            result["membership"],
+            membership,
+        )
+        self.assertEqual(
+            result["risk"],
+            safe_risk,
+        )
+
+    def test_active_member_cannot_join_again(self):
+        user = SimpleNamespace(id=1)
+
+        group = SimpleNamespace(
+            id=7,
+            max_members=15,
+        )
+
+        existing_membership = SimpleNamespace(
+            status=MembershipStatus.ACTIVE,
+        )
+
+        with (
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "_get_existing_membership",
+                return_value=existing_membership,
+            ),
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "analyze_group_risk",
+            ) as mock_risk,
+        ):
+            with self.assertRaises(
+                AlreadyMemberError
+            ):
+                join_group(
+                    user=user,
+                    group=group,
+                )
+
+        mock_risk.assert_not_called()
+
+    def test_user_cannot_join_full_group(self):
+        user = SimpleNamespace(id=1)
+
+        group = SimpleNamespace(
+            id=7,
+            max_members=15,
+        )
+
+        with (
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "_get_existing_membership",
+                return_value=None,
+            ),
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "_get_active_member_count",
+                return_value=15,
+            ),
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "analyze_group_risk",
+            ) as mock_risk,
+        ):
+            with self.assertRaises(GroupFullError):
+                join_group(
+                    user=user,
+                    group=group,
+                )
+
+        mock_risk.assert_not_called()
+
+    def test_user_cannot_join_high_risk_group(self):
+        user = SimpleNamespace(id=1)
+
+        group = SimpleNamespace(
+            id=7,
+            max_members=15,
+        )
+
+        high_risk = {
+            "group_id": 7,
+            "score": 85,
+            "level": RiskLevel.HIGH,
+            "is_safe": False,
+            "reasons": [],
+            "recommendation": (
+                "Joining this group is not recommended."
+            ),
+        }
+
+        with (
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "_get_existing_membership",
+                return_value=None,
+            ),
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "_get_active_member_count",
+                return_value=5,
+            ),
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "analyze_group_risk",
+                return_value=high_risk,
+            ),
+        ):
+            with self.assertRaises(
+                HighRiskGroupError
+            ) as context:
+                join_group(
+                    user=user,
+                    group=group,
+                )
+
+        self.assertEqual(
+            context.exception.details,
+            {
+                "risk_score": 85,
+                "risk_level": RiskLevel.HIGH,
+            },
+        )
+
+    def test_leave_group_changes_status_to_left(self):
+        user = SimpleNamespace(id=1)
+
+        membership = MagicMock()
+        membership.status = MembershipStatus.ACTIVE
+
+        with (
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "_get_membership_for_update",
+                return_value=membership,
+            ),
+            patch(
+                "teams.team6.services."
+                "membership_service."
+                "transaction.atomic",
+                return_value=nullcontext(),
+            ),
+        ):
+            result = leave_group(
+                user=user,
+                membership_id=4,
+            )
+
+        self.assertEqual(
+            membership.status,
+            MembershipStatus.LEFT,
+        )
+        membership.save.assert_called_once_with(
+            update_fields=["status"]
+        )
+        self.assertEqual(result, membership)
