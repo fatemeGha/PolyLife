@@ -1,0 +1,90 @@
+name: Team2 CI
+
+on:
+  push:
+    paths:
+      - "teams/team2/**"
+      - ".github/workflows/team2-ci.yml"
+
+  pull_request:
+    paths:
+      - "teams/team2/**"
+      - ".github/workflows/team2-ci.yml"
+  
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  COMPOSE_FILE: teams/team2/docker-compose.yml
+
+jobs:
+  team2-tests:
+    name: Unit and API tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Prepare Team2 environment
+        run: |
+          cp teams/team2/.env.example .env
+          docker network inspect polylife_net >/dev/null 2>&1 \
+            || docker network create polylife_net
+
+      - name: Build and start Team2 services
+        run: |
+          docker compose --env-file .env -f "$COMPOSE_FILE" \
+            up -d --build db team2_redis team2_backend
+
+      - name: Wait for Team2 API
+        run: |
+          for attempt in {1..60}; do
+            if curl --silent --show-error --fail \
+              http://127.0.0.1:8002/api/team2/health/ >/dev/null; then
+              echo "Team2 API is ready."
+              exit 0
+            fi
+            echo "Waiting for Team2 API ($attempt/60)..."
+            sleep 2
+          done
+
+          echo "Team2 API did not become ready."
+          docker compose --env-file .env -f "$COMPOSE_FILE" \
+            logs --no-color --tail=200 team2_backend
+          exit 1
+
+      - name: Run existing Team2 tests
+        run: |
+          docker compose --env-file .env -f "$COMPOSE_FILE" exec -T \
+            team2_backend python -m unittest discover \
+            -s teams/team2/tests \
+            -t . \
+            -p "test_*.py" \
+            -v
+
+      - name: Run Team2 API integration tests
+        env:
+          TEAM2_API_BASE_URL: http://127.0.0.1:8002/api/team2
+        run: |
+          python teams/team2/tests/test_api_integration.py -v
+
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          docker compose --env-file .env -f "$COMPOSE_FILE" \
+            logs --no-color --tail=300
+
+      - name: Stop Team2 services
+        if: always()
+        run: |
+          docker compose --env-file .env -f "$COMPOSE_FILE" \
+            down -v --remove-orphans
