@@ -39,7 +39,8 @@ CREATE TABLE workout_preference (
     workout_type VARCHAR(100),
     available_days JSONB,
     equipment JSONB,
-    preferred_time TIME,
+    preferred_start_time TIME,
+    preferred_end_time TIME,
 
     FOREIGN KEY (user_id)
         REFERENCES user_profile(id)

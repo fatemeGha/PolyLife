@@ -32,13 +32,14 @@ VALUES
 ----------------------------------------------------
 
 INSERT INTO workout_preference
-(user_id, workout_type, available_days, equipment, preferred_time)
+(user_id, workout_type, available_days, equipment,
+preferred_start_time, preferred_end_time)
 VALUES
-(1,'Cardio','["Mon","Wed","Fri"]','["Treadmill"]','09:00'),
-(2,'Strength','["Tue","Thu"]','["Barbell","Dumbbell"]','18:00'),
-(3,'Running','["Sat","Sun"]','[]','07:30'),
-(4,'CrossFit','["Mon","Thu"]','["Kettlebell"]','17:00'),
-(5,'Yoga','["Wed","Fri"]','["Mat"]','08:30');
+(1,'Cardio','["Mon","Wed","Fri"]','["Treadmill"]','09:00','11:00')
+(2,'Strength','["Tue","Thu"]','["Barbell","Dumbbell"]','18:00','20:00'),
+(3,'Running','["Sat","Sun"]','[]','07:30','09:00'),
+(4,'CrossFit','["Mon","Thu"]','["Kettlebell"]','17:00','18:30'),
+(5,'Yoga','["Wed","Fri"]','["Mat"]','08:30','10:00');
 
 ----------------------------------------------------
 -- TRAINING GROUP
