@@ -22,6 +22,9 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY teams/team2/requirements.txt ./teams/team2/
+RUN pip install --no-cache-dir -r teams/team2/requirements.txt
+
 COPY . .
 # Pull the built SPA from the frontend stage so WhiteNoise can serve it.
 COPY --from=frontend /frontend/dist ./frontend/dist
