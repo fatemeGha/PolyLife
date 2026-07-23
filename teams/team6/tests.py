@@ -1,3 +1,7 @@
+from rest_framework import status
+
+from .exceptions import GroupNotFoundError
+from .responses import error_response, success_response
 from unittest.mock import patch
 
 from django.test import SimpleTestCase
@@ -230,3 +234,40 @@ class UserProfileWriteSerializerTests(SimpleTestCase):
 
         self.assertFalse(serializer.is_valid())
         self.assertIn("goal_ids", serializer.errors)
+        
+class ResponseHelperTests(SimpleTestCase):
+    def test_success_response_structure(self):
+        response = success_response(
+            message="Data retrieved successfully",
+            data={"id": 1},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertTrue(response.data["success"])
+        self.assertEqual(
+            response.data["data"],
+            {"id": 1},
+        )
+
+    def test_error_response_structure(self):
+        error = GroupNotFoundError()
+
+        response = error_response(
+            code=error.code,
+            message=error.message,
+            details=error.details,
+            status_code=error.status_code,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        self.assertFalse(response.data["success"])
+        self.assertEqual(
+            response.data["error"]["code"],
+            "GROUP_NOT_FOUND",
+        )
