@@ -32,7 +32,6 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.
 # Team microservices mounted by the core. Empty until teams are implemented;
 # the /api/microservices endpoint then falls back to decoy placeholders.
 TEAM_APPS = env.list("TEAM_APPS", default=[])
-TEAM_APPS.append("teams.team2.apps.TeamConfig")
 
 
 # Application definition
@@ -44,10 +43,6 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-
-    # Celery results & periodic task scheduler
-    "django_celery_beat",
-    "django_celery_results",
 
     # Local apps
     "core",
@@ -124,7 +119,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "Asia/Tehran"
+TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
@@ -157,45 +152,3 @@ JWT_REFRESH_TTL_SECONDS = env.int("JWT_REFRESH_TTL_SECONDS", default=7 * 24 * 60
 # Auth cookies. In production set JWT_COOKIE_SECURE=True (HTTPS only).
 JWT_COOKIE_SECURE = env.bool("JWT_COOKIE_SECURE", default=False)
 JWT_COOKIE_SAMESITE = env("JWT_COOKIE_SAMESITE", default="Lax")
-
-# ---------------------------------------------------------------------------
-# Celery Configuration
-# ---------------------------------------------------------------------------
-
-import os
-
-# Broker: Redis running as a Docker service named "team2_redis"
-CELERY_BROKER_URL = os.environ.get(
-    "CELERY_BROKER_URL",
-    "redis://team2_redis:6379/0"
-)
-
-# Result backend: same Redis instance, different DB index
-CELERY_RESULT_BACKEND = os.environ.get(
-    "CELERY_RESULT_BACKEND",
-    "redis://team2_redis:6379/1"
-)
-
-# Timezone must match the timezone used when comparing reminder times
-CELERY_TIMEZONE = "Asia/Tehran"
-CELERY_ENABLE_UTC = False
-
-# Serialization
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_ACCEPT_CONTENT = ["json"]
-
-# Task execution limits
-CELERY_TASK_SOFT_TIME_LIMIT = 30   # seconds — task gets SoftTimeLimitExceeded
-CELERY_TASK_TIME_LIMIT = 60        # seconds — task is killed after this
-
-# Retry configuration defaults (can be overridden per task)
-CELERY_TASK_MAX_RETRIES = 3
-CELERY_TASK_DEFAULT_RETRY_DELAY = 60  # seconds between retries
-
-# Store task results in DB (requires django-celery-results)
-CELERY_RESULT_EXTENDED = True
-
-# Celery Beat scheduler — stores schedule in Django DB
-CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
-
