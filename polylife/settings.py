@@ -45,10 +45,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    # Celery results & periodic task scheduler
-    "django_celery_beat",
-    "django_celery_results",
-
     # Local apps
     "core",
 

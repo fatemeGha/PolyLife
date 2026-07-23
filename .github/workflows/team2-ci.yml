@@ -77,17 +77,17 @@ jobs:
       - name: Run Team2 API integration tests
         env:
           TEAM2_API_BASE_URL: http://127.0.0.1:8002/api/team2
-
-  run: |
-    python teams/team2/tests/api_integration_test.py -v
-      - name: Show service logs on failure
-        if: failure()
+        
         run: |
-          docker compose --env-file .env -f "$COMPOSE_FILE" \
-            logs --no-color --tail=300
+          python teams/team2/tests/api_integration_test.py -v
+            - name: Show service logs on failure
+              if: failure()
+              run: |
+                docker compose --env-file .env -f "$COMPOSE_FILE" \
+                  logs --no-color --tail=300
 
-      - name: Stop Team2 services
-        if: always()
-        run: |
-          docker compose --env-file .env -f "$COMPOSE_FILE" \
-            down -v --remove-orphans
+            - name: Stop Team2 services
+              if: always()
+              run: |
+                docker compose --env-file .env -f "$COMPOSE_FILE" \
+                  down -v --remove-orphans
