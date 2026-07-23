@@ -34,6 +34,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install dependencies
+        run: pip install -r teams/team2/requirements.tx
+
       - name: Prepare Team2 environment
         run: |
           cp teams/team2/.env.example .env
