@@ -335,6 +335,7 @@ def analyze_group_risk(
         "recommendation": recommendation,
     }
 
+
     if persist:
         RiskAnalysis.objects.create(
             user=user,

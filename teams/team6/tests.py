@@ -5,6 +5,8 @@ from .responses import error_response, success_response
 from unittest.mock import patch
 from .services.risk_service import analyze_group_risk
 from django.test import SimpleTestCase
+from datetime import time
+from .services.matching_service import recommend_groups
 
 from .models import (
     FitnessLevel,
@@ -447,3 +449,198 @@ class RiskServiceTests(SimpleTestCase):
         )
 
         self.assertEqual(result["level"], RiskLevel.LOW)
+class MatchingServiceTests(SimpleTestCase):
+    @patch(
+        "teams.team6.services.matching_service."
+        "analyze_group_risk"
+    )
+    @patch(
+        "teams.team6.services.matching_service."
+        "_get_active_member_count"
+    )
+    @patch(
+        "teams.team6.services.matching_service."
+        "_get_candidate_groups"
+    )
+    def test_exact_matching_group_is_recommended(
+        self,
+        mock_candidate_groups,
+        mock_member_count,
+        mock_risk_analysis,
+    ):
+        user = SimpleNamespace(
+            id=1,
+            fitness_level=FitnessLevel.BEGINNER,
+        )
+
+        group = SimpleNamespace(
+            id=7,
+            goal_id=1,
+            name="Beginner Running Group",
+            workout_type=WorkoutType.RUNNING,
+            difficulty_level=DifficultyLevel.EASY,
+            available_days=[
+                "saturday",
+                "monday",
+            ],
+            equipment=["exercise_mat"],
+            start_time=time(16, 0),
+            end_time=time(18, 0),
+            max_members=15,
+        )
+
+        mock_candidate_groups.return_value = [group]
+        mock_member_count.return_value = 8
+        mock_risk_analysis.return_value = {
+            "group_id": 7,
+            "score": 20,
+            "level": RiskLevel.LOW,
+            "is_safe": True,
+            "reasons": [],
+            "recommendation": (
+                "This group is suitable for the user."
+            ),
+        }
+
+        results = recommend_groups(
+            user=user,
+            goal_id=1,
+            fitness_level=FitnessLevel.BEGINNER,
+            workout_type=WorkoutType.RUNNING,
+            available_days=[
+                "saturday",
+                "monday",
+            ],
+            preferred_start_time=time(16, 0),
+            preferred_end_time=time(18, 0),
+            equipment=["exercise_mat"],
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(
+            results[0]["match_score"],
+            100,
+        )
+        self.assertEqual(
+            results[0]["member_count"],
+            8,
+        )
+        self.assertEqual(
+            results[0]["group"],
+            group,
+        )
+
+    @patch(
+        "teams.team6.services.matching_service."
+        "analyze_group_risk"
+    )
+    @patch(
+        "teams.team6.services.matching_service."
+        "_get_active_member_count"
+    )
+    @patch(
+        "teams.team6.services.matching_service."
+        "_get_candidate_groups"
+    )
+    def test_high_risk_group_is_excluded(
+        self,
+        mock_candidate_groups,
+        mock_member_count,
+        mock_risk_analysis,
+    ):
+        user = SimpleNamespace(
+            id=1,
+            fitness_level=FitnessLevel.BEGINNER,
+        )
+
+        group = SimpleNamespace(
+            id=7,
+            goal_id=1,
+            name="Risky Running Group",
+            workout_type=WorkoutType.RUNNING,
+            difficulty_level=DifficultyLevel.EASY,
+            available_days=["saturday"],
+            equipment=[],
+            start_time=time(16, 0),
+            end_time=time(18, 0),
+            max_members=15,
+        )
+
+        mock_candidate_groups.return_value = [group]
+        mock_member_count.return_value = 5
+        mock_risk_analysis.return_value = {
+            "group_id": 7,
+            "score": 85,
+            "level": RiskLevel.HIGH,
+            "is_safe": False,
+            "reasons": [],
+            "recommendation": (
+                "Joining this group is not recommended."
+            ),
+        }
+
+        results = recommend_groups(
+            user=user,
+            goal_id=1,
+            fitness_level=FitnessLevel.BEGINNER,
+            workout_type=WorkoutType.RUNNING,
+            available_days=["saturday"],
+            preferred_start_time=time(16, 0),
+            preferred_end_time=time(18, 0),
+            equipment=[],
+        )
+
+        self.assertEqual(results, [])
+
+    @patch(
+        "teams.team6.services.matching_service."
+        "analyze_group_risk"
+    )
+    @patch(
+        "teams.team6.services.matching_service."
+        "_get_active_member_count"
+    )
+    @patch(
+        "teams.team6.services.matching_service."
+        "_get_candidate_groups"
+    )
+    def test_full_group_is_excluded(
+        self,
+        mock_candidate_groups,
+        mock_member_count,
+        mock_risk_analysis,
+    ):
+        user = SimpleNamespace(
+            id=1,
+            fitness_level=FitnessLevel.BEGINNER,
+        )
+
+        group = SimpleNamespace(
+            id=7,
+            goal_id=1,
+            name="Full Running Group",
+            workout_type=WorkoutType.RUNNING,
+            difficulty_level=DifficultyLevel.EASY,
+            available_days=["saturday"],
+            equipment=[],
+            start_time=time(16, 0),
+            end_time=time(18, 0),
+            max_members=15,
+        )
+
+        mock_candidate_groups.return_value = [group]
+        mock_member_count.return_value = 15
+
+        results = recommend_groups(
+            user=user,
+            goal_id=1,
+            fitness_level=FitnessLevel.BEGINNER,
+            workout_type=WorkoutType.RUNNING,
+            available_days=["saturday"],
+            preferred_start_time=time(16, 0),
+            preferred_end_time=time(18, 0),
+            equipment=[],
+        )
+
+        self.assertEqual(results, [])
+        mock_risk_analysis.assert_not_called()
