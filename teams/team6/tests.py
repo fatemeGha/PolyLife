@@ -1,15 +1,17 @@
 from rest_framework import status
-
+from types import SimpleNamespace
 from .exceptions import GroupNotFoundError
 from .responses import error_response, success_response
 from unittest.mock import patch
-
+from .services.risk_service import analyze_group_risk
 from django.test import SimpleTestCase
 
 from .models import (
     FitnessLevel,
     InjurySeverity,
     WorkoutType,
+    DifficultyLevel,
+    RiskLevel,
 )
 from .serializers import (
     GroupRecommendationRequestSerializer,
@@ -234,7 +236,7 @@ class UserProfileWriteSerializerTests(SimpleTestCase):
 
         self.assertFalse(serializer.is_valid())
         self.assertIn("goal_ids", serializer.errors)
-        
+
 class ResponseHelperTests(SimpleTestCase):
     def test_success_response_structure(self):
         response = success_response(
@@ -271,3 +273,177 @@ class ResponseHelperTests(SimpleTestCase):
             response.data["error"]["code"],
             "GROUP_NOT_FOUND",
         )
+class RiskServiceTests(SimpleTestCase):
+    @patch(
+        "teams.team6.services.risk_service."
+        "_get_user_injuries"
+    )
+    @patch(
+        "teams.team6.services.risk_service."
+        "_get_group_exercises"
+    )
+    def test_low_risk_without_injury(
+        self,
+        mock_group_exercises,
+        mock_injuries,
+    ):
+        user = SimpleNamespace(
+            id=1,
+            fitness_level=FitnessLevel.BEGINNER,
+        )
+
+        group = SimpleNamespace(
+            id=7,
+            name="Beginner Running Group",
+            workout_type=WorkoutType.RUNNING,
+            difficulty_level=DifficultyLevel.EASY,
+        )
+
+        exercise = SimpleNamespace(
+            id=4,
+            name="Light Running",
+            type=WorkoutType.RUNNING,
+            risk_level=RiskLevel.LOW,
+        )
+
+        group_exercise = SimpleNamespace(
+            exercise=exercise,
+            intensity="low",
+        )
+
+        mock_group_exercises.return_value = [
+            group_exercise
+        ]
+        mock_injuries.return_value = []
+
+        result = analyze_group_risk(
+            user=user,
+            group=group,
+            persist=False,
+        )
+
+        self.assertEqual(result["level"], RiskLevel.LOW)
+        self.assertTrue(result["is_safe"])
+        self.assertEqual(result["score"], 10)
+
+    @patch(
+        "teams.team6.services.risk_service."
+        "_get_user_injuries"
+    )
+    @patch(
+        "teams.team6.services.risk_service."
+        "_get_group_exercises"
+    )
+    def test_high_risk_for_severe_injury(
+        self,
+        mock_group_exercises,
+        mock_injuries,
+    ):
+        user = SimpleNamespace(
+            id=1,
+            fitness_level=FitnessLevel.BEGINNER,
+        )
+
+        group = SimpleNamespace(
+            id=7,
+            name="Advanced Running Group",
+            workout_type=WorkoutType.RUNNING,
+            difficulty_level=DifficultyLevel.HARD,
+        )
+
+        exercise = SimpleNamespace(
+            id=4,
+            name="High Intensity Running",
+            type=WorkoutType.RUNNING,
+            risk_level=RiskLevel.HIGH,
+        )
+
+        group_exercise = SimpleNamespace(
+            exercise=exercise,
+            intensity="high",
+        )
+
+        injury = SimpleNamespace(
+            injury_type="Previous knee injury",
+            body_part="knee",
+            severity=InjurySeverity.SEVERE,
+        )
+
+        mock_group_exercises.return_value = [
+            group_exercise
+        ]
+        mock_injuries.return_value = [injury]
+
+        result = analyze_group_risk(
+            user=user,
+            group=group,
+            persist=False,
+        )
+
+        self.assertEqual(result["level"], RiskLevel.HIGH)
+        self.assertFalse(result["is_safe"])
+        self.assertEqual(result["score"], 100)
+        self.assertTrue(result["reasons"])
+
+    @patch(
+        "teams.team6.services.risk_service."
+        "RiskAnalysis.objects.create"
+    )
+    @patch(
+        "teams.team6.services.risk_service."
+        "_get_user_injuries"
+    )
+    @patch(
+        "teams.team6.services.risk_service."
+        "_get_group_exercises"
+    )
+    def test_analysis_is_persisted(
+        self,
+        mock_group_exercises,
+        mock_injuries,
+        mock_create,
+    ):
+        user = SimpleNamespace(
+            id=1,
+            fitness_level=FitnessLevel.ADVANCED,
+        )
+
+        group = SimpleNamespace(
+            id=7,
+            name="Easy Yoga Group",
+            workout_type=WorkoutType.YOGA,
+            difficulty_level=DifficultyLevel.EASY,
+        )
+
+        exercise = SimpleNamespace(
+            id=4,
+            name="Light Yoga",
+            type=WorkoutType.YOGA,
+            risk_level=RiskLevel.LOW,
+        )
+
+        mock_group_exercises.return_value = [
+            SimpleNamespace(
+                exercise=exercise,
+                intensity="low",
+            )
+        ]
+        mock_injuries.return_value = []
+
+        result = analyze_group_risk(
+            user=user,
+            group=group,
+            persist=True,
+        )
+
+        mock_create.assert_called_once_with(
+            user=user,
+            group=group,
+            risk_level=RiskLevel.LOW,
+            score=10,
+            recommendation=(
+                "This group is suitable for the user."
+            ),
+        )
+
+        self.assertEqual(result["level"], RiskLevel.LOW)
