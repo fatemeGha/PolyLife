@@ -30,8 +30,8 @@ class TeamConfig(AppConfig):
         # Retrieve MongoDB connection string from MONGO_DATABASE_URL environment variable
         database_url = os.environ.get("MONGO_DATABASE_URL")
 
-        if not database_url:
-            raise RuntimeError("MONGO_DATABASE_URL is not configured")
+        # if not database_url:
+            #raise RuntimeError("MONGO_DATABASE_URL is not configured")
 
         try:
             get_connection(alias="default")
