@@ -29,6 +29,9 @@ ALLOWED_HOSTS = env.list(
     default=["localhost", "127.0.0.1"],
 )
 
+if env.bool("TESTING", default=False) and "testserver" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("testserver")
+
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.staticfiles",
