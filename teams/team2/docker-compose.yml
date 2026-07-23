@@ -60,7 +60,7 @@ services:
     restart: unless-stopped
     command: >
       sh -c "python manage.py migrate &&
-             python manage.py runserver 0.0.0.0:8000"
+             python teams/team2/manage.py runserver 0.0.0.0:8000"
     env_file:
       - ../../.env
     environment:
@@ -86,7 +86,7 @@ services:
     container_name: team2_worker
     restart: unless-stopped
     command: >
-      celery -A config worker
+      celery -A teams.team2.config worker
         --loglevel=info
         --concurrency=4
         --queues=team2_reminders,celery
@@ -116,9 +116,8 @@ services:
     container_name: team2_beat
     restart: unless-stopped
     command: >
-      celery -A config beat
+      celery -A teams.team2.config beat
         --loglevel=info
-        --scheduler django_celery_beat.schedulers:DatabaseScheduler
     env_file:
       - ../../.env
     environment:

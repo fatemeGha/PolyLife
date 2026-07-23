@@ -10,7 +10,7 @@ so CELERY_* values in config/settings.py configure it automatically.
 import os
 from celery import Celery
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "teams.team2.config.settings")
 
 app = Celery("config")
 
@@ -21,4 +21,4 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 # Auto-discover a tasks.py inside every app listed in INSTALLED_APPS -
 # this is what picks up teams/team2/tasks.py without needing to import
 # it manually anywhere.
-app.autodiscover_tasks()
+app.autodiscover_tasks(["teams.team2"])
