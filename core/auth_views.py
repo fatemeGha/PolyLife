@@ -4,6 +4,7 @@ Authentication API endpoints.
 Contract (consumed by the home-page frontend):
   POST /api/register  {username, password}  -> 201 {success, message, user}
   POST /api/login     {username, password}  -> 200 {success, message, token, user}
+                         + HttpOnly access cookie shared with localhost gateways
   GET  /api/user      (Bearer token)        -> 200 {success, user}
   POST /api/logout    (Bearer token)        -> 200 {success, message}
   GET  /api/verify    (Bearer / cookie)     -> 200 + X-User-* headers (forward-auth)
@@ -16,6 +17,7 @@ import json
 from urllib.parse import quote
 
 import jwt
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -27,6 +29,7 @@ from core.auth import api_login_required
 from core.jwt_utils import REFRESH, decode_token, make_access_token, make_refresh_token
 
 User = get_user_model()
+ACCESS_COOKIE_NAME = "access_token"
 
 
 def _user_dict(user):
@@ -47,6 +50,29 @@ def _json_body(request):
 
 def _error(message, status):
     return JsonResponse({"success": False, "message": message}, status=status)
+
+
+def _set_access_cookie(response, token):
+    """Share the Core access token with gateways on other localhost ports."""
+    response.set_cookie(
+        ACCESS_COOKIE_NAME,
+        token,
+        max_age=settings.JWT_ACCESS_TTL_SECONDS,
+        path="/",
+        secure=settings.JWT_COOKIE_SECURE,
+        httponly=True,
+        samesite=settings.JWT_COOKIE_SAMESITE,
+    )
+    return response
+
+
+def _delete_access_cookie(response):
+    response.delete_cookie(
+        ACCESS_COOKIE_NAME,
+        path="/",
+        samesite=settings.JWT_COOKIE_SAMESITE,
+    )
+    return response
 
 
 @csrf_exempt
@@ -97,15 +123,17 @@ def login(request):
     if user is None:
         return _error("نام کاربری یا رمز عبور اشتباه است", 401)
 
-    return JsonResponse(
+    access_token = make_access_token(user)
+    response = JsonResponse(
         {
             "success": True,
             "message": "ورود با موفقیت انجام شد",
-            "token": make_access_token(user),
+            "token": access_token,
             "refresh": make_refresh_token(user),
             "user": _user_dict(user),
         }
     )
+    return _set_access_cookie(response, access_token)
 
 
 @require_GET
@@ -121,7 +149,8 @@ def logout(request):
     # Invalidate every token issued so far for this user.
     request.user.token_version += 1
     request.user.save(update_fields=["token_version"])
-    return JsonResponse({"success": True, "message": "خروج با موفقیت انجام شد"})
+    response = JsonResponse({"success": True, "message": "خروج با موفقیت انجام شد"})
+    return _delete_access_cookie(response)
 
 
 @require_GET
@@ -162,4 +191,6 @@ def refresh(request):
     if user is None or user.token_version != payload.get("tv"):
         return _error("توکن نامعتبر است", 401)
 
-    return JsonResponse({"success": True, "token": make_access_token(user)})
+    access_token = make_access_token(user)
+    response = JsonResponse({"success": True, "token": access_token})
+    return _set_access_cookie(response, access_token)

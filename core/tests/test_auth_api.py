@@ -1,7 +1,7 @@
 import json
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 User = get_user_model()
@@ -64,6 +64,29 @@ class LoginTests(TestCase):
         self.assertIn("token", body)
         self.assertEqual(body["user"]["username"], "ali")
 
+    def test_login_sets_shared_http_only_access_cookie(self):
+        resp = _post(self.client, "core:login", {"username": "ali", "password": STRONG_PASSWORD})
+
+        cookie = resp.cookies["access_token"]
+        self.assertEqual(cookie.value, resp.json()["token"])
+        self.assertEqual(cookie["path"], "/")
+        self.assertEqual(cookie["samesite"], "Lax")
+        self.assertTrue(cookie["httponly"])
+
+        # Browser cookies are scoped by host, not port. This is the token that
+        # a localhost:910N gateway forwards to Core's /api/verify endpoint.
+        verify = self.client.get(reverse("core:verify"))
+        self.assertEqual(verify.status_code, 200)
+        self.assertEqual(verify.headers["X-User-Username"], "ali")
+
+    @override_settings(JWT_COOKIE_SECURE=True, JWT_COOKIE_SAMESITE="Strict")
+    def test_login_cookie_respects_security_settings(self):
+        resp = _post(self.client, "core:login", {"username": "ali", "password": STRONG_PASSWORD})
+
+        cookie = resp.cookies["access_token"]
+        self.assertTrue(cookie["secure"])
+        self.assertEqual(cookie["samesite"], "Strict")
+
     def test_login_wrong_password_fails(self):
         resp = _post(self.client, "core:login", {"username": "ali", "password": "wrong"})
 
@@ -86,6 +109,7 @@ class UserEndpointTests(TestCase):
         return self.client.get(reverse(name), HTTP_AUTHORIZATION=f"Bearer {self.token}")
 
     def test_user_requires_authentication(self):
+        self.client.cookies.clear()
         resp = self.client.get(reverse("core:user"))
 
         self.assertEqual(resp.status_code, 401)
@@ -104,6 +128,7 @@ class UserEndpointTests(TestCase):
             reverse("core:logout"), HTTP_AUTHORIZATION=f"Bearer {self.token}"
         )
         self.assertEqual(logout.status_code, 200)
+        self.assertEqual(logout.cookies["access_token"]["max-age"], 0)
 
         # The same token must no longer work after logout.
         resp = self._auth_get("core:user")
