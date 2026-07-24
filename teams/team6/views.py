@@ -8,6 +8,8 @@ from .exceptions import (
     ProfileNotFoundError,
     Team6ServiceError,
     ValidationServiceError,
+    GoalNotFoundError,
+    GroupNotFoundError,
 )
 from .models import (
     FitnessGoal,
@@ -15,6 +17,7 @@ from .models import (
     UserGoal,
     UserProfile,
     WorkoutPreference,
+    TrainingGroup,
 )
 from .responses import (
     error_response,
@@ -24,7 +27,13 @@ from .responses import (
 from .serializers import (
     UserProfileReadSerializer,
     UserProfileWriteSerializer,
+    GroupRecommendationRequestSerializer,
+    RiskAnalysisRequestSerializer,
+    TrainingGroupDetailSerializer,
+    TrainingGroupListSerializer,
 )
+from .services.matching_service import recommend_groups
+from .services.risk_service import analyze_group_risk
 
 
 def _service_error_response(error):
@@ -87,6 +96,72 @@ def _get_profile(core_user_id):
         )
     except UserProfile.DoesNotExist as exc:
         raise ProfileNotFoundError() from exc
+def _get_training_group(group_id):
+    try:
+        return (
+            TrainingGroup.objects
+            .select_related("goal")
+            .get(id=group_id)
+        )
+    except TrainingGroup.DoesNotExist as exc:
+        raise GroupNotFoundError() from exc
+
+
+def _validate_goal_exists(raw_goal_id):
+    try:
+        goal_id = int(raw_goal_id)
+    except (TypeError, ValueError):
+        return
+
+    if (
+        goal_id > 0
+        and not FitnessGoal.objects.filter(
+            id=goal_id
+        ).exists()
+    ):
+        raise GoalNotFoundError()
+
+
+def _format_time(value):
+    if value is None:
+        return None
+
+    return value.strftime("%H:%M")
+
+
+def _serialize_recommendation(item):
+    group = item["group"]
+    risk = item["risk"]
+
+    return {
+        "id": group.id,
+        "name": group.name,
+        "description": group.description,
+        "goal": {
+            "id": group.goal.id,
+            "name": group.goal.name,
+        },
+        "workout_type": group.workout_type,
+        "difficulty_level": group.difficulty_level,
+        "available_days": group.available_days,
+        "start_time": _format_time(
+            group.start_time
+        ),
+        "end_time": _format_time(
+            group.end_time
+        ),
+        "equipment": group.equipment,
+        "member_count": item["member_count"],
+        "max_members": group.max_members,
+        "match_score": item["match_score"],
+        "risk": {
+            "score": risk["score"],
+            "level": risk["level"],
+            "recommendation": (
+                risk["recommendation"]
+            ),
+        },
+    }
 
 
 def _replace_goals(*, profile, goal_ids):
@@ -380,6 +455,217 @@ class ProfileView(APIView):
                     "successfully"
                 ),
                 data={},
+            )
+
+        except Team6ServiceError as error:
+            return _service_error_response(error)
+class TrainingGroupListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        try:
+            _get_gateway_user(request)
+
+            groups = (
+                TrainingGroup.objects
+                .select_related("goal")
+                .order_by("id")
+            )
+
+            serializer = TrainingGroupListSerializer(
+                groups,
+                many=True,
+            )
+
+            return success_response(
+                message=(
+                    "Training groups retrieved "
+                    "successfully"
+                ),
+                data={
+                    "groups": serializer.data,
+                },
+            )
+
+        except Team6ServiceError as error:
+            return _service_error_response(error)
+
+
+class TrainingGroupDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, group_id):
+        try:
+            core_user_id, _ = _get_gateway_user(
+                request
+            )
+
+            profile = _get_profile(core_user_id)
+            group = _get_training_group(group_id)
+
+            serializer = (
+                TrainingGroupDetailSerializer(
+                    group
+                )
+            )
+
+            group_data = dict(serializer.data)
+
+            risk = analyze_group_risk(
+                user=profile,
+                group=group,
+                persist=False,
+            )
+
+            group_data["risk"] = {
+                "score": risk["score"],
+                "level": risk["level"],
+                "recommendation": (
+                    risk["recommendation"]
+                ),
+            }
+
+            return success_response(
+                message=(
+                    "Group details retrieved "
+                    "successfully"
+                ),
+                data={
+                    "group": group_data,
+                },
+            )
+
+        except Team6ServiceError as error:
+            return _service_error_response(error)
+
+
+class GroupRecommendationView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        try:
+            core_user_id, _ = _get_gateway_user(
+                request
+            )
+
+            profile = _get_profile(core_user_id)
+
+            _validate_goal_exists(
+                request.data.get("goal_id")
+            )
+
+            serializer = (
+                GroupRecommendationRequestSerializer(
+                    data=request.data
+                )
+            )
+
+            if not serializer.is_valid():
+                return validation_error_response(
+                    serializer.errors
+                )
+
+            data = serializer.validated_data
+
+            recommendations = recommend_groups(
+                user=profile,
+                goal_id=data["goal_id"],
+                fitness_level=data["fitness_level"],
+                workout_type=data["workout_type"],
+                available_days=data["available_days"],
+                preferred_start_time=(
+                    data["preferred_start_time"]
+                ),
+                preferred_end_time=(
+                    data["preferred_end_time"]
+                ),
+                equipment=data.get(
+                    "equipment",
+                    [],
+                ),
+                physical_limitations=data.get(
+                    "physical_limitations",
+                    [],
+                ),
+            )
+
+            groups = [
+                _serialize_recommendation(item)
+                for item in recommendations
+            ]
+
+            if groups:
+                message = (
+                    "Recommended groups retrieved "
+                    "successfully"
+                )
+            else:
+                message = (
+                    "No matching training groups "
+                    "were found"
+                )
+
+            return success_response(
+                message=message,
+                data={
+                    "groups": groups,
+                },
+            )
+
+        except Team6ServiceError as error:
+            return _service_error_response(error)
+
+
+class RiskAnalysisView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        try:
+            core_user_id, _ = _get_gateway_user(
+                request
+            )
+
+            profile = _get_profile(core_user_id)
+
+            serializer = RiskAnalysisRequestSerializer(
+                data=request.data
+            )
+
+            if not serializer.is_valid():
+                return validation_error_response(
+                    serializer.errors
+                )
+
+            group = _get_training_group(
+                serializer.validated_data[
+                    "group_id"
+                ]
+            )
+
+            analysis = analyze_group_risk(
+                user=profile,
+                group=group,
+                persist=True,
+            )
+
+            message = (
+                "High injury risk detected"
+                if not analysis["is_safe"]
+                else (
+                    "Injury risk analysis "
+                    "completed successfully"
+                )
+            )
+
+            return success_response(
+                message=message,
+                data={
+                    "analysis": analysis,
+                },
             )
 
         except Team6ServiceError as error:

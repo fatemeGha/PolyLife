@@ -6,6 +6,7 @@ from ..models import (
     TrainingGroup,
 )
 from .risk_service import analyze_group_risk
+from types import SimpleNamespace
 
 
 FITNESS_DIFFICULTY_SCORES = {
@@ -230,13 +231,29 @@ def recommend_groups(
     preferred_start_time,
     preferred_end_time,
     equipment=None,
+    physical_limitations=None,
     minimum_score=40,
     limit=10,
 ):
     equipment = equipment or []
+    physical_limitations = physical_limitations or []
+
+    temporary_injuries = [
+        SimpleNamespace(
+            injury_type="Temporary physical limitation",
+            body_part=item["body_part"],
+            severity=item["severity"],
+        )
+        for item in physical_limitations
+    ]
 
     groups = _get_candidate_groups(goal_id)
     recommendations = []
+
+    for group in groups:
+        member_count = _get_active_member_count(
+            group
+        )
 
     for group in groups:
         member_count = _get_active_member_count(
@@ -264,6 +281,7 @@ def recommend_groups(
             user=user,
             group=group,
             persist=False,
+            additional_injuries=temporary_injuries,
         )
 
         if risk["level"] == RiskLevel.HIGH:
