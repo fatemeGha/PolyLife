@@ -13,6 +13,7 @@ eggs/
 
 # Virtual environments
 .venv/
+.venv*/
 venv/
 env/
 ENV/
@@ -39,6 +40,8 @@ dist-ssr/
 *.local
 .vite/
 coverage/
+.coverage
+htmlcov/
 
 # ===== Docker =====
 docker-compose.override.yml
@@ -49,3 +52,6 @@ docker-compose.override.yml
 *.swp
 .DS_Store
 Thumbs.db
+
+# Team 8 submission documentation is kept outside the source repository
+teams/team8/docs/

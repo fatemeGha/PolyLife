@@ -1,0 +1,15 @@
+[run]
+branch = True
+source = teams.team8
+
+[report]
+show_missing = True
+skip_covered = True
+fail_under = 70
+omit =
+    */migrations/*
+    */tests/*
+    */admin.py
+    */manage.py
+    */config/asgi.py
+    */config/wsgi.py

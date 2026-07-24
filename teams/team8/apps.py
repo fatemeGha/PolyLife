@@ -7,3 +7,8 @@ class TeamConfig(AppConfig):
     # router uses to send this team's models to its OWN database.
     name = "teams.team8"
     label = "team8"
+    verbose_name = "PolyLife Social Network & LMS"
+
+    def ready(self):
+        # Register drf-spectacular's authentication extension.
+        from . import schema  # noqa: F401

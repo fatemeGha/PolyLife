@@ -1,0 +1,413 @@
+{
+  "info": {
+    "_postman_id": "8f400317-0100-4000-8000-000000000003",
+    "name": "PolyLife Team 8 — Social Network + LMS",
+    "description": "Microservice 3 API. Set coreToken to a valid PolyLife Core JWT, or use the authenticated Core cookie.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{coreToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:9108"
+    },
+    {
+      "key": "coreToken",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": "1"
+    },
+    {
+      "key": "postId",
+      "value": ""
+    },
+    {
+      "key": "contentId",
+      "value": ""
+    },
+    {
+      "key": "courseId",
+      "value": ""
+    },
+    {
+      "key": "enrollmentId",
+      "value": ""
+    },
+    {
+      "key": "lessonId",
+      "value": ""
+    },
+    {
+      "key": "recipientId",
+      "value": "2"
+    }
+  ],
+  "item": [
+    {
+      "name": "Identity",
+      "item": [
+        {
+          "name": "Health",
+          "auth": {
+            "type": "noauth"
+          },
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health/"
+          }
+        },
+        {
+          "name": "Who am I",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/whoami"
+          }
+        },
+        {
+          "name": "My profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/profiles/me/"
+          }
+        },
+        {
+          "name": "Update my profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"display_name\":\"Amirhossein Bagheri\",\"bio\":\"Student athlete\",\"location\":\"Tehran\"}"
+            },
+            "url": "{{baseUrl}}/api/v1/profiles/me/"
+          }
+        },
+        {
+          "name": "Search profiles",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/profiles/?q=coach&role=coach"
+          }
+        },
+        {
+          "name": "Follow profile",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/profiles/2/follow/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Social",
+      "item": [
+        {
+          "name": "Personal feed",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/posts/feed/"
+          }
+        },
+        {
+          "name": "Explore posts",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/posts/explore/?q="
+          }
+        },
+        {
+          "name": "Create post",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) pm.collectionVariables.set('postId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"body\":\"تمرین امروز عالی بود\",\"post_type\":\"workout\",\"status\":\"published\",\"workout\":{\"exercise_type\":\"پرس سینه\",\"weight_kg\":80,\"repetitions\":8}}"
+            },
+            "url": "{{baseUrl}}/api/v1/posts/"
+          }
+        },
+        {
+          "name": "Like post",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/posts/{{postId}}/like/"
+          }
+        },
+        {
+          "name": "Add comment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"text\":\"آفرین، ادامه بده!\"}"
+            },
+            "url": "{{baseUrl}}/api/v1/posts/{{postId}}/comments/"
+          }
+        },
+        {
+          "name": "Report post",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"محتوای نامناسب\"}"
+            },
+            "url": "{{baseUrl}}/api/v1/posts/{{postId}}/report/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Content Hub",
+      "item": [
+        {
+          "name": "Categories",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/categories/?page_size=50"
+          }
+        },
+        {
+          "name": "Search contents",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/contents/?q=&type=article&difficulty=beginner"
+          }
+        },
+        {
+          "name": "Rate content",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"score\":5}"
+            },
+            "url": "{{baseUrl}}/api/v1/contents/{{contentId}}/rate/"
+          }
+        },
+        {
+          "name": "Content recommendations",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/contents/{{contentId}}/recommendations/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Courses",
+      "item": [
+        {
+          "name": "Course catalog",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/courses/?difficulty=beginner"
+          }
+        },
+        {
+          "name": "Course detail",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/courses/{{courseId}}/"
+          }
+        },
+        {
+          "name": "Enroll",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if ([200, 201].includes(pm.response.code)) pm.collectionVariables.set('enrollmentId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/courses/{{courseId}}/enroll/"
+          }
+        },
+        {
+          "name": "My enrollments",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/enrollments/?page_size=50"
+          }
+        },
+        {
+          "name": "Complete lesson",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"watched_seconds\":600,\"is_completed\":true}"
+            },
+            "url": "{{baseUrl}}/api/v1/enrollments/{{enrollmentId}}/lessons/{{lessonId}}/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Messaging & Activity",
+      "item": [
+        {
+          "name": "Activity timeline",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/activity/"
+          }
+        },
+        {
+          "name": "Direct inbox",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/messages/"
+          }
+        },
+        {
+          "name": "Direct thread",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/messages/with/{{recipientId}}/"
+          }
+        },
+        {
+          "name": "Send direct message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"body\":\"سلام! این پیام از Postman ارسال شده است.\"}"
+            },
+            "url": "{{baseUrl}}/api/v1/messages/with/{{recipientId}}/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Commerce",
+      "item": [
+        {
+          "name": "My cart",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/cart/"
+          }
+        },
+        {
+          "name": "Add course to cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"course_id\":\"{{courseId}}\"}"
+            },
+            "url": "{{baseUrl}}/api/v1/cart/"
+          }
+        },
+        {
+          "name": "Checkout cart",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/cart/checkout/"
+          }
+        },
+        {
+          "name": "Purchase history",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/purchases/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Plans",
+      "item": [
+        {
+          "name": "Training plans",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/training-plans/"
+          }
+        },
+        {
+          "name": "Diet plans",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/diet-plans/"
+          }
+        }
+      ]
+    }
+  ]
+}
