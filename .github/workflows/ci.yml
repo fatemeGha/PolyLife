@@ -31,6 +31,49 @@ jobs:
       - name: Run core tests
         run: python manage.py test core
 
+  team8-backend:
+    name: Team 8 backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: teams/team8/requirements.txt
+      - name: Install Team 8 dependencies
+        run: pip install -r teams/team8/requirements.txt
+      - name: Django checks and migrations check
+        working-directory: teams/team8
+        run: |
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+      - name: Run Team 8 tests with branch coverage
+        working-directory: teams/team8
+        run: |
+          coverage run --rcfile=.coveragerc manage.py test teams.team8.tests
+          coverage report --rcfile=.coveragerc
+      - name: Validate OpenAPI contract
+        working-directory: teams/team8
+        run: python manage.py spectacular --file /tmp/team8-openapi.yaml --validate
+
+  team8-frontend:
+    name: Team 8 frontend quality
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: teams/team8/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: teams/team8/frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
   # ------------------------------------------------------------------
   # Core Docker image
   # ------------------------------------------------------------------
@@ -57,6 +100,11 @@ jobs:
       COMPOSE_FILE: teams/team2/docker-compose.yml
 
     steps:
+      - uses: actions/checkout@v4
+      - name: Build the core image (frontend + backend)
+        run: docker compose build
+      - name: Build the Team 8 image
+        run: docker build -f teams/team8/Dockerfile -t polylife-team8:test .
       - name: Check out repository
         uses: actions/checkout@v4
 

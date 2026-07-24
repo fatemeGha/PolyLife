@@ -28,7 +28,9 @@ with its **own database** and **own gateway** — behind this core.
   ## Suggested flow
 
 1. **Register** — `POST /api/register` with `{"username": "ali", "password": "Sup3rSecretPass"}`.
-2. **Login** — `POST /api/login` with the same credentials. Copy `token` and `refresh` from the response.
+2. **Login** — `POST /api/login` with the same credentials. The response returns
+   `token`/`refresh` and sets an HttpOnly access cookie so browser sessions also
+   work through team gateways on ports `9101`…`9108`.
 3. **Get user** — `GET /api/user` with `Authorization: Bearer <token>`.
 4. **Refresh** — `POST /api/refresh` with `{"refresh": "<refresh>"}` → a fresh `token`.
 5. **Verify** — `GET /api/verify` with the Bearer token → check the `X-User-*` response headers (this is what a team gateway calls).

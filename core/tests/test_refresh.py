@@ -38,6 +38,8 @@ class RefreshTokenTests(TestCase):
         resp = self._refresh(refresh)
         self.assertEqual(resp.status_code, 200)
         new_access = resp.json()["token"]
+        self.assertEqual(resp.cookies["access_token"].value, new_access)
+        self.assertTrue(resp.cookies["access_token"]["httponly"])
 
         # The new access token must authenticate /api/user.
         me = self.client.get(
