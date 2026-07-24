@@ -152,7 +152,7 @@ function FilterPanel({ onSearch, onJoinGroup }) {
   }
 
   return (
-    <div className="bg-[#185E64] rounded-3xl p-8 shadow-2xl">
+    <div className="bg-[#D9D9D9] rounded-3xl p-8 shadow-2xl">
       {error && (
         <div className="mb-6 rounded-xl bg-red-100 text-red-700 p-4 text-sm border-2 border-red-200 flex items-center gap-2">
           <span>⚠️</span>
@@ -163,11 +163,11 @@ function FilterPanel({ onSearch, onJoinGroup }) {
       <div className="space-y-6">
         <div className="grid grid-cols-3 gap-5">
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-[#185E64] mb-2">
               🎯 هدف ورزشی
             </label>
             <select
-              className="w-full px-4 py-2.5 border-2 border-[#BCDADD] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FDE6C3] focus:border-transparent bg-white text-sm text-gray-700"
+              className="w-full px-4 py-2.5 border-2 border-[#BCDADD] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FDE6C3] focus:border-transparent bg-white text-sm text-[#185E64]"
               name="goalId"
               value={formData.goalId}
               onChange={handleChange}
@@ -182,11 +182,11 @@ function FilterPanel({ onSearch, onJoinGroup }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-[#185E64] mb-2">
               💪 سطح آمادگی
             </label>
             <select
-              className="w-full px-4 py-2.5 border-2 border-[#BCDADD] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FDE6C3] focus:border-transparent bg-white text-sm text-gray-700"
+              className="w-full px-4 py-2.5 border-2 border-[#BCDADD] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FDE6C3] focus:border-transparent bg-white text-sm text-[#185E64]"
               name="fitnessLevel"
               value={formData.fitnessLevel}
               onChange={handleChange}
@@ -201,11 +201,11 @@ function FilterPanel({ onSearch, onJoinGroup }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-[#185E64] mb-2">
               🏋️ نوع تمرین
             </label>
             <select
-              className="w-full px-4 py-2.5 border-2 border-[#BCDADD] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FDE6C3] focus:border-transparent bg-white text-sm text-gray-700"
+              className="w-full px-4 py-2.5 border-2 border-[#BCDADD] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FDE6C3] focus:border-transparent bg-white text-sm text-[#185E64]"
               name="workoutType"
               value={formData.workoutType}
               onChange={handleChange}
@@ -222,7 +222,7 @@ function FilterPanel({ onSearch, onJoinGroup }) {
 
         <div className="grid grid-cols-3 gap-5">
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-[#185E64] mb-2">
               🕐 زمان شروع
             </label>
             <input
@@ -231,12 +231,12 @@ function FilterPanel({ onSearch, onJoinGroup }) {
               value={formData.preferredStartTime}
               onChange={handleChange}
               step="60"
-              className="w-full px-4 py-2.5 border-2 border-[#BCDADD] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FDE6C3] focus:border-transparent bg-white text-sm text-gray-700"
+              className="w-full px-4 py-2.5 border-2 border-[#BCDADD] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FDE6C3] focus:border-transparent bg-white text-sm text-[#185E64]"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-[#185E64] mb-2">
               🕐 زمان پایان
             </label>
             <input
@@ -245,14 +245,14 @@ function FilterPanel({ onSearch, onJoinGroup }) {
               value={formData.preferredEndTime}
               onChange={handleChange}
               step="60"
-              className="w-full px-4 py-2.5 border-2 border-[#BCDADD] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FDE6C3] focus:border-transparent bg-white text-sm text-gray-700"
+              className="w-full px-4 py-2.5 border-2 border-[#BCDADD] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FDE6C3] focus:border-transparent bg-white text-sm text-[#185E64]"
             />
           </div>
 
           <div className="flex items-end">
             <button
               onClick={handleSubmit}
-              className="w-full bg-[#FDE6C3] hover:bg-[#f5d4a8] text-[#185E64] font-bold py-2.5 px-4 rounded-xl transition-all duration-200 border-2 border-white border-opacity-30 shadow-lg hover:shadow-xl text-base flex items-center justify-center gap-2"
+              className="w-full bg-[#FDE6C3] hover:bg-[#f5d4a8] text-[#185E64] font-bold py-2.5 px-4 rounded-xl transition-all duration-200 border-2 border-[#185E64] border-opacity-20 shadow-lg hover:shadow-xl text-base flex items-center justify-center gap-2"
             >
               <span>🔍</span>
               جستجوی گروه
@@ -260,19 +260,19 @@ function FilterPanel({ onSearch, onJoinGroup }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-6 pt-4 border-t-2 border-[#BCDADD] border-opacity-30">
+        <div className="grid grid-cols-3 gap-6 pt-4 border-t-2 border-[#BCDADD] border-opacity-50">
           <div>
-            <label className="block text-sm font-medium text-white mb-3">
+            <label className="block text-sm font-medium text-[#185E64] mb-3">
               📅 روزهای تمرین
             </label>
             <div className="grid grid-cols-2 gap-2">
               {days.map((day) => (
-                <label key={day} className="flex items-center gap-2 text-sm text-white cursor-pointer hover:text-[#FDE6C3] transition-colors">
+                <label key={day} className="flex items-center gap-2 text-sm text-[#185E64] cursor-pointer hover:text-[#185E64] hover:opacity-70 transition-colors">
                   <input
                     type="checkbox"
                     checked={formData.availableDays.includes(day)}
                     onChange={() => toggleDay(day)}
-                    className="w-4 h-4 text-[#FDE6C3] border-2 border-white rounded focus:ring-[#FDE6C3] bg-white bg-opacity-20"
+                    className="w-4 h-4 text-[#FDE6C3] border-2 border-[#185E64] rounded focus:ring-[#FDE6C3] bg-white"
                   />
                   {day}
                 </label>
@@ -281,17 +281,17 @@ function FilterPanel({ onSearch, onJoinGroup }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-white mb-3">
+            <label className="block text-sm font-medium text-[#185E64] mb-3">
               🏋️ تجهیزات در دسترس
             </label>
             <div className="grid grid-cols-2 gap-2">
               {equipment.map((item) => (
-                <label key={item.id} className="flex items-center gap-2 text-sm text-white cursor-pointer hover:text-[#FDE6C3] transition-colors">
+                <label key={item.id} className="flex items-center gap-2 text-sm text-[#185E64] cursor-pointer hover:text-[#185E64] hover:opacity-70 transition-colors">
                   <input
                     type="checkbox"
                     checked={selectedEquipment.includes(item.id)}
                     onChange={() => toggleEquipment(item.id)}
-                    className="w-4 h-4 text-[#FDE6C3] border-2 border-white rounded focus:ring-[#FDE6C3] bg-white bg-opacity-20"
+                    className="w-4 h-4 text-[#FDE6C3] border-2 border-[#185E64] rounded focus:ring-[#FDE6C3] bg-white"
                   />
                   {item.name}
                 </label>
@@ -300,47 +300,47 @@ function FilterPanel({ onSearch, onJoinGroup }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-white mb-3">
+            <label className="block text-sm font-medium text-[#185E64] mb-3">
               🩺 سابقه آسیب
             </label>
             
             {hasInjuryHistory ? (
-              <div className="bg-white bg-opacity-10 rounded-xl p-4 backdrop-blur-sm">
-                <p className="text-sm text-white font-medium mb-2 flex items-center gap-2">
+              <div className="bg-[#CDF1F4] bg-opacity-30 rounded-xl p-4">
+                <p className="text-sm text-[#185E64] font-medium mb-2 flex items-center gap-2">
                   <span>📋</span> آسیب‌های ثبت شده:
                 </p>
                 <ul className="space-y-1.5">
                   {userInjuries.map((injury, index) => (
-                    <li key={index} className="text-sm text-white flex items-center gap-2">
+                    <li key={index} className="text-sm text-[#185E64] flex items-center gap-2">
                       <span>🔴</span>
                       {injury.name || injury}
                     </li>
                   ))}
                 </ul>
-                <p className="text-xs text-white text-opacity-70 mt-2 flex items-center gap-1">
+                <p className="text-xs text-[#185E64] text-opacity-70 mt-2 flex items-center gap-1">
                   <span>💡</span> برای تغییر به پروفایل مراجعه کنید
                 </p>
               </div>
             ) : (
               <div>
-                <p className="text-sm text-white text-opacity-90 mb-2 flex items-center gap-1">
+                <p className="text-sm text-[#185E64] text-opacity-80 mb-2 flex items-center gap-1">
                   <span>🤔</span> آسیب‌ها را انتخاب کنید:
                 </p>
                 <div className="grid grid-cols-1 gap-1.5 max-h-32 overflow-y-auto pr-1">
                   {injuryOptions.map((injury) => (
-                    <label key={injury.id} className="flex items-center gap-2 text-sm text-white cursor-pointer hover:text-[#FDE6C3] transition-colors">
+                    <label key={injury.id} className="flex items-center gap-2 text-sm text-[#185E64] cursor-pointer hover:text-[#185E64] hover:opacity-70 transition-colors">
                       <input
                         type="checkbox"
                         checked={selectedInjuries.includes(injury.id)}
                         onChange={() => toggleInjury(injury.id)}
-                        className="w-4 h-4 text-[#FDE6C3] border-2 border-white rounded focus:ring-[#FDE6C3] bg-white bg-opacity-20"
+                        className="w-4 h-4 text-[#FDE6C3] border-2 border-[#185E64] rounded focus:ring-[#FDE6C3] bg-white"
                       />
                       {injury.name}
                     </label>
                   ))}
                 </div>
                 {selectedInjuries.length === 0 && (
-                  <p className="text-sm text-green-300 mt-2 flex items-center gap-1">
+                  <p className="text-sm text-[#185E64] mt-2 flex items-center gap-1 font-medium">
                     <span>✅</span> شما سالم هستید
                   </p>
                 )}

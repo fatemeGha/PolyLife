@@ -44,7 +44,7 @@ function GroupSuggestion() {
                 </span>
               </div>
               
-              <div className="bg-white rounded-3xl shadow-2xl p-6">
+              <div className="bg-[#D9D9D9] rounded-3xl shadow-2xl p-6">
                 <GroupList searchParams={searchParams} />
               </div>
             </div>
