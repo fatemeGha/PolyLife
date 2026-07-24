@@ -11,6 +11,10 @@ from .views import (
     RiskAnalysisView,
     TrainingGroupDetailView,
     TrainingGroupListView,
+    MembershipDetailView,
+    MembershipListCreateView,
+    AlternativeGroupListView,
+    TrainingGroupMemberListView,
 )
 
 
@@ -58,9 +62,29 @@ urlpatterns = [
         name="group-recommend",
     ),
     path(
+    "groups/<int:group_id>/members",
+    TrainingGroupMemberListView.as_view(),
+    name="group-members",
+),  
+    path(
         "groups/<int:group_id>",
         TrainingGroupDetailView.as_view(),
         name="group-detail",
+    ),
+    path(
+    "memberships",
+    MembershipListCreateView.as_view(),
+    name="membership-list-create",
+    ),
+    path(
+    "groups/<int:group_id>/alternatives",
+    AlternativeGroupListView.as_view(),
+    name="group-alternatives",
+    ),
+    path(
+        "memberships/<int:membership_id>",
+        MembershipDetailView.as_view(),
+        name="membership-detail",
     ),
     path(
         "risk-analysis",

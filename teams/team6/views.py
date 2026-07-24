@@ -10,6 +10,7 @@ from .exceptions import (
     ValidationServiceError,
     GoalNotFoundError,
     GroupNotFoundError,
+    ProfileIncompleteError,
 )
 from .models import (
     FitnessGoal,
@@ -32,8 +33,18 @@ from .serializers import (
     TrainingGroupDetailSerializer,
     TrainingGroupListSerializer,
     FitnessGoalSerializer,
+    GroupMembershipReadSerializer,
+    MembershipCreateSerializer,
+    GroupMemberSerializer,
 )
 from .services.matching_service import recommend_groups
+from .services.membership_service import (
+    get_group_members,
+    get_membership,
+    get_user_memberships,
+    join_group,
+    leave_group,
+)
 from .services.risk_service import analyze_group_risk
 from .options import (
     BODY_PART_OPTIONS,
@@ -759,4 +770,275 @@ class InjuryOptionsView(APIView):
                 ),
             },
         )
-        
+class MembershipListCreateView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        try:
+            core_user_id, _ = _get_gateway_user(
+                request
+            )
+
+            profile = _get_profile(core_user_id)
+
+            memberships = get_user_memberships(
+                user=profile
+            )
+
+            serializer = GroupMembershipReadSerializer(
+                memberships,
+                many=True,
+            )
+
+            return success_response(
+                message=(
+                    "Memberships retrieved "
+                    "successfully"
+                ),
+                data={
+                    "memberships": serializer.data,
+                },
+            )
+
+        except Team6ServiceError as error:
+            return _service_error_response(error)
+
+    def post(self, request):
+        try:
+            core_user_id, _ = _get_gateway_user(
+                request
+            )
+
+            profile = _get_profile(core_user_id)
+
+            serializer = MembershipCreateSerializer(
+                data=request.data
+            )
+
+            if not serializer.is_valid():
+                return validation_error_response(
+                    serializer.errors
+                )
+
+            group = _get_training_group(
+                serializer.validated_data[
+                    "group_id"
+                ]
+            )
+
+            result = join_group(
+                user=profile,
+                group=group,
+            )
+
+            membership_serializer = (
+                GroupMembershipReadSerializer(
+                    result["membership"]
+                )
+            )
+
+            return success_response(
+                message=(
+                    "Membership created "
+                    "successfully"
+                ),
+                data={
+                    "membership": (
+                        membership_serializer.data
+                    ),
+                },
+                status_code=status.HTTP_201_CREATED,
+            )
+
+        except Team6ServiceError as error:
+            return _service_error_response(error)
+
+
+class MembershipDetailView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, membership_id):
+        try:
+            core_user_id, _ = _get_gateway_user(
+                request
+            )
+
+            profile = _get_profile(core_user_id)
+
+            membership = get_membership(
+                user=profile,
+                membership_id=membership_id,
+            )
+
+            serializer = GroupMembershipReadSerializer(
+                membership
+            )
+
+            return success_response(
+                message=(
+                    "Membership retrieved "
+                    "successfully"
+                ),
+                data={
+                    "membership": serializer.data,
+                },
+            )
+
+        except Team6ServiceError as error:
+            return _service_error_response(error)
+
+    def delete(self, request, membership_id):
+        try:
+            core_user_id, _ = _get_gateway_user(
+                request
+            )
+
+            profile = _get_profile(core_user_id)
+
+            membership = leave_group(
+                user=profile,
+                membership_id=membership_id,
+            )
+
+            serializer = GroupMembershipReadSerializer(
+                membership
+            )
+
+            return success_response(
+                message=(
+                    "Membership left successfully"
+                ),
+                data={
+                    "membership": serializer.data,
+                },
+            )
+
+        except Team6ServiceError as error:
+            return _service_error_response(error)
+class AlternativeGroupListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, group_id):
+        try:
+            core_user_id, _ = _get_gateway_user(
+                request
+            )
+
+            profile = _get_profile(core_user_id)
+
+            source_group = _get_training_group(
+                group_id
+            )
+
+            preference = (
+                WorkoutPreference.objects
+                .filter(user_profile=profile)
+                .first()
+            )
+
+            if preference is None:
+                raise ProfileIncompleteError(
+                    details={
+                        "workout_preference": [
+                            (
+                                "Workout preference "
+                                "is required."
+                            )
+                        ]
+                    }
+                )
+
+            recommendations = recommend_groups(
+                user=profile,
+                goal_id=source_group.goal_id,
+                fitness_level=(
+                    profile.fitness_level
+                ),
+                workout_type=(
+                    preference.workout_type
+                ),
+                available_days=(
+                    preference.available_days
+                ),
+                preferred_start_time=(
+                    preference.preferred_start_time
+                ),
+                preferred_end_time=(
+                    preference.preferred_end_time
+                ),
+                equipment=preference.equipment,
+                limit=11,
+            )
+
+            alternatives = [
+                _serialize_recommendation(item)
+                for item in recommendations
+                if (
+                    item["group"].id
+                    != source_group.id
+                )
+            ][:10]
+
+            if alternatives:
+                message = (
+                    "Alternative groups retrieved "
+                    "successfully"
+                )
+            else:
+                message = (
+                    "No safe alternative training "
+                    "groups were found"
+                )
+
+            return success_response(
+                message=message,
+                data={
+                    "groups": alternatives,
+                },
+            )
+
+        except Team6ServiceError as error:
+            return _service_error_response(error)
+class TrainingGroupMemberListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, group_id):
+        try:
+            _get_gateway_user(request)
+
+            group = _get_training_group(group_id)
+
+            memberships = get_group_members(
+                group=group
+            )
+
+            serializer = GroupMemberSerializer(
+                memberships,
+                many=True,
+            )
+
+            members_data = serializer.data
+
+            return success_response(
+                message=(
+                    "Group members retrieved "
+                    "successfully"
+                ),
+                data={
+                    "group": {
+                        "id": group.id,
+                        "name": group.name,
+                    },
+                    "member_count": len(
+                        members_data
+                    ),
+                    "members": members_data,
+                },
+            )
+
+        except Team6ServiceError as error:
+            return _service_error_response(error)

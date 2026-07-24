@@ -220,3 +220,13 @@ def leave_group(
             )
 
     return membership
+def get_group_members(*, group):
+    return (
+        GroupMembership.objects
+        .filter(
+            group=group,
+            status=MembershipStatus.ACTIVE,
+        )
+        .select_related("user_profile")
+        .order_by("joined_at", "id")
+    )
