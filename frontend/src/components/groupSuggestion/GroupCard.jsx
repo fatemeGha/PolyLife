@@ -1,67 +1,136 @@
-function GroupCard({ group }) {
+import {
+  workoutTypeLabels,
+  difficultyLabels,
+  riskLabels,
+  goalLabels
+}
+from "./constants/labels";
 
-  const riskColor = {
-    Low: "text-green-600",
-    Medium: "text-yellow-600",
-    High: "text-red-600",
-  };
 
-  return (
 
-    <div className="border rounded-xl p-5 shadow-sm">
+function GroupCard({group}) {
 
-      <div className="flex justify-between">
 
-        <div>
+return (
 
-          <h3 className="text-xl font-bold">
-            {group.name}
-          </h3>
+<div className="border rounded-xl p-5 shadow-sm">
 
-          <p>
-            Goal : {group.goal_name}
-          </p>
 
-          <p>
-            Workout : {group.workout_type}
-          </p>
+<h3 className="text-xl font-bold mb-3">
 
-          <p>
-            Difficulty : {group.difficulty_level}
-          </p>
+{group.name}
 
-          <p>
-            Members : {group.member_count}/{group.max_members}
-          </p>
+</h3>
 
-          <p className={riskColor[group.risk_level]}>
-            Risk : {group.risk_level}
-          </p>
 
-        </div>
 
-        <div className="flex flex-col justify-end gap-3">
+<p>
+هدف:
+{
+ goalLabels[group.goal.name]
+ ||
+ group.goal.name
+}
+</p>
 
-          <button
-            className="px-5 py-2 border rounded hover:bg-gray-100"
-          >
-            View Details
-          </button>
 
-          <button
-            className="px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Join
-          </button>
 
-        </div>
+<p>
+نوع تمرین:
+{
+ workoutTypeLabels[group.workout_type]
+}
+</p>
 
-      </div>
 
-    </div>
 
-  );
+<p>
+سطح سختی:
+{
+ difficultyLabels[group.difficulty_level]
+}
+</p>
+
+
+
+<p>
+زمان:
+
+{group.start_time}
+
+تا
+
+{group.end_time}
+
+</p>
+
+
+
+<p>
+اعضا:
+
+{group.member_count}
+
+از
+
+{group.max_members}
+
+</p>
+
+
+
+<p>
+
+امتیاز تطبیق:
+
+{group.match_score}%
+
+</p>
+
+
+
+<p>
+
+سطح ریسک:
+
+<span>
+
+{
+riskLabels[group.risk.level]
+}
+
+</span>
+
+</p>
+
+
+
+<button
+
+className="
+mt-4
+px-5
+py-2
+bg-blue-600
+text-white
+rounded
+"
+
+>
+
+مشاهده جزئیات
+
+</button>
+
+
+
+</div>
+
+
+);
+
 
 }
+
 
 export default GroupCard;

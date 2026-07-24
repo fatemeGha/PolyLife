@@ -1,105 +1,151 @@
 import { useEffect, useState } from "react";
 import GroupCard from "./GroupCard";
 
+
 function GroupList({ filters }) {
 
-  const [groups, setGroups] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  useEffect(() => {
+  const [groups,setGroups] = useState([]);
 
-    if (!filters) return;
+  const [loading,setLoading] = useState(false);
 
-    const fetchGroups = async () => {
+  const [error,setError] = useState("");
 
-      setLoading(true);
-      setError("");
+
+
+  useEffect(()=>{
+
+
+    if(!filters)
+      return;
+
+
+
+    async function loadGroups(){
+
 
       try {
 
-        const response = await fetch("/api/groups/recommend", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(filters),
-        });
+        setLoading(true);
+        setError("");
 
-        const data = await response.json();
 
-        if (!response.ok) {
-          throw new Error(data.message);
-        }
+        const response = await apiRequest(
+          "/groups/recommend",
+          {
+            method:"POST",
 
-        setGroups(data.groups || []);
+            body:JSON.stringify(filters)
+          }
+        );
 
-      } catch (err) {
+
+        setGroups(
+          response.data.groups
+        );
+
+
+      }
+
+      catch(err){
 
         setGroups([]);
-        setError(err.message || "خطا در ارتباط با سرور");
 
-      } finally {
+        setError(err.message);
+
+      }
+
+      finally{
 
         setLoading(false);
 
       }
 
-    };
 
-    fetchGroups();
+    }
 
-  }, [filters]);
 
-  if (!filters)
+    loadGroups();
+
+
+  },[filters]);
+
+
+
+  if(loading)
     return (
-      <div className="text-gray-500">
-        برای مشاهده گروه‌ها ابتدا فرم را تکمیل کنید.
-      </div>
+      <p>
+        در حال جستجوی گروه مناسب...
+      </p>
     );
 
-  if (loading)
-    return <p>در حال جستجوی گروه‌های مناسب...</p>;
 
-  if (error)
+
+  if(error)
+
     return (
-      <div className="bg-red-100 text-red-700 rounded p-4">
+
+      <div className="text-red-600 border p-3 rounded">
+
         {error}
+
       </div>
+
     );
 
-  if (groups.length === 0)
+
+
+  if(groups.length===0)
+
     return (
-      <div className="text-gray-500">
-        گروهی مطابق شرایط شما پیدا نشد.
-      </div>
+
+      <p className="text-gray-500">
+
+        گروه مناسبی پیدا نشد.
+
+      </p>
+
     );
+
+
 
   return (
 
     <div>
 
-      <h2 className="text-2xl font-bold mb-5">
+
+      <h2 className="text-xl font-bold mb-5">
+
         گروه‌های پیشنهادی
+
       </h2>
 
-      <div className="space-y-5">
 
-        {groups.map(group => (
 
-          <GroupCard
-            key={group.id}
-            group={group}
-          />
+      <div className="space-y-4">
 
-        ))}
+
+        {
+          groups.map(group=>(
+
+            <GroupCard
+              key={group.id}
+              group={group}
+            />
+
+          ))
+        }
+
 
       </div>
+
 
     </div>
 
   );
 
+
 }
+
 
 export default GroupList;
