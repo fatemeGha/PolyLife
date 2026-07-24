@@ -227,7 +227,7 @@ def _replace_injury_history(
     InjuryHistory.objects.bulk_create(
         [
             InjuryHistory(
-                user=profile,
+                user_profile=profile,
                 **injury_data,
             )
             for injury_data in injuries
