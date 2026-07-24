@@ -130,7 +130,7 @@ def _get_group_exercises(group):
 def _get_user_injuries(user):
     return list(
         InjuryHistory.objects
-        .filter(user=user)
+        .filter(user_profile=user)
         .order_by("-injury_date", "-id")
     )
 
@@ -340,7 +340,7 @@ def analyze_group_risk(
 
     if persist:
         RiskAnalysis.objects.create(
-            user=user,
+            user_profile=user,
             group=group,
             risk_level=level,
             score=score,

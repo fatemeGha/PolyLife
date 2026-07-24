@@ -1,12 +1,20 @@
 from django.urls import path
 
 from .views import (
+    EquipmentOptionsView,
+    FitnessGoalListView,
     GroupRecommendationView,
     HealthView,
+    InjuryOptionsView,
+    OptionsView,
     ProfileView,
     RiskAnalysisView,
     TrainingGroupDetailView,
     TrainingGroupListView,
+    MembershipDetailView,
+    MembershipListCreateView,
+    AlternativeGroupListView,
+    TrainingGroupMemberListView,
 )
 
 
@@ -17,6 +25,26 @@ urlpatterns = [
         "health",
         HealthView.as_view(),
         name="health",
+    ),
+    path(
+        "goals",
+        FitnessGoalListView.as_view(),
+        name="goal-list",
+    ),
+    path(
+        "options",
+        OptionsView.as_view(),
+        name="options",
+    ),
+    path(
+        "equipment",
+        EquipmentOptionsView.as_view(),
+        name="equipment-options",
+    ),
+    path(
+        "injury-options",
+        InjuryOptionsView.as_view(),
+        name="injury-options",
     ),
     path(
         "profile",
@@ -34,9 +62,29 @@ urlpatterns = [
         name="group-recommend",
     ),
     path(
+    "groups/<int:group_id>/members",
+    TrainingGroupMemberListView.as_view(),
+    name="group-members",
+),  
+    path(
         "groups/<int:group_id>",
         TrainingGroupDetailView.as_view(),
         name="group-detail",
+    ),
+    path(
+    "memberships",
+    MembershipListCreateView.as_view(),
+    name="membership-list-create",
+    ),
+    path(
+    "groups/<int:group_id>/alternatives",
+    AlternativeGroupListView.as_view(),
+    name="group-alternatives",
+    ),
+    path(
+        "memberships/<int:membership_id>",
+        MembershipDetailView.as_view(),
+        name="membership-detail",
     ),
     path(
         "risk-analysis",

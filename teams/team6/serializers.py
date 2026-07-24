@@ -103,7 +103,7 @@ class UserProfileReadSerializer(serializers.ModelSerializer):
     def get_goals(self, obj):
         user_goals = (
             UserGoal.objects
-            .filter(user=obj)
+            .filter(user_profile=obj)
             .select_related("goal")
             .order_by("goal__name")
         )
@@ -113,7 +113,7 @@ class UserProfileReadSerializer(serializers.ModelSerializer):
         return FitnessGoalSerializer(goals, many=True).data
 
     def get_workout_preference(self, obj):
-        preference = WorkoutPreference.objects.filter(user=obj).first()
+        preference = WorkoutPreference.objects.filter( user_profile=obj).first()
 
         if preference is None:
             return None
@@ -123,7 +123,7 @@ class UserProfileReadSerializer(serializers.ModelSerializer):
     def get_injury_history(self, obj):
         injuries = (
             InjuryHistory.objects
-            .filter(user=obj)
+            .filter(user_profile=obj)
             .order_by("-injury_date", "-id")
         )
 
@@ -384,4 +384,30 @@ class RiskAnalysisReadSerializer(serializers.ModelSerializer):
             "risk_level",
             "recommendation",
             "created_at",
+        ]
+class GroupMemberSerializer(serializers.ModelSerializer):
+    profile_id = serializers.IntegerField(
+        source="user_profile.id",
+        read_only=True,
+    )
+
+    core_user_id = serializers.IntegerField(
+        source="user_profile.core_user_id",
+        read_only=True,
+    )
+
+    fitness_level = serializers.CharField(
+        source="user_profile.fitness_level",
+        read_only=True,
+    )
+
+    class Meta:
+        model = GroupMembership
+        fields = [
+            "id",
+            "profile_id",
+            "core_user_id",
+            "fitness_level",
+            "status",
+            "joined_at",
         ]

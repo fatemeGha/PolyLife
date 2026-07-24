@@ -30,7 +30,7 @@ def _get_existing_membership(
     for_update=False,
 ):
     queryset = GroupMembership.objects.filter(
-        user=user,
+        user_profile=user,
         group=group,
     )
 
@@ -76,7 +76,7 @@ def _get_membership_for_update(
             .select_related("group")
             .get(
                 id=membership_id,
-                user=user,
+                user_profile=user,
             )
         )
     except GroupMembership.DoesNotExist as exc:
@@ -86,7 +86,7 @@ def _get_membership_for_update(
 def get_user_memberships(*, user):
     return (
         GroupMembership.objects
-        .filter(user=user)
+        .filter(user_profile=user)
         .select_related("group")
         .order_by("-joined_at", "-id")
     )
@@ -103,7 +103,7 @@ def get_membership(
             .select_related("group")
             .get(
                 id=membership_id,
-                user=user,
+                user_profile=user,
             )
         )
     except GroupMembership.DoesNotExist as exc:
@@ -186,10 +186,11 @@ def join_group(
             )
 
             membership = existing_membership
+
         else:
             membership = (
                 GroupMembership.objects.create(
-                    user=user,
+                    user_profile=user,
                     group=locked_group,
                     status=MembershipStatus.ACTIVE,
                 )
@@ -219,3 +220,13 @@ def leave_group(
             )
 
     return membership
+def get_group_members(*, group):
+    return (
+        GroupMembership.objects
+        .filter(
+            group=group,
+            status=MembershipStatus.ACTIVE,
+        )
+        .select_related("user_profile")
+        .order_by("joined_at", "id")
+    )

@@ -16,6 +16,14 @@ from .views import (
     RiskAnalysisView,
     TrainingGroupDetailView,
     TrainingGroupListView,
+    EquipmentOptionsView,
+    FitnessGoalListView,
+    InjuryOptionsView,
+    OptionsView,
+    MembershipDetailView,
+    MembershipListCreateView,
+    AlternativeGroupListView,
+    TrainingGroupMemberListView,
 )
 
 from .models import (
@@ -461,7 +469,7 @@ class RiskServiceTests(SimpleTestCase):
         )
 
         mock_create.assert_called_once_with(
-            user=user,
+            user_profile=user,
             group=group,
             risk_level=RiskLevel.LOW,
             score=10,
@@ -736,7 +744,7 @@ class MembershipServiceTests(SimpleTestCase):
             )
 
         mock_create.assert_called_once_with(
-            user=user,
+            user_profile=user,
             group=group,
             status=MembershipStatus.ACTIVE,
         )
@@ -745,6 +753,7 @@ class MembershipServiceTests(SimpleTestCase):
             result["membership"],
             membership,
         )
+
         self.assertEqual(
             result["risk"],
             safe_risk,
@@ -1360,4 +1369,713 @@ class TrainingGroupViewTests(SimpleTestCase):
         self.assertEqual(
             response.data["message"],
             "High injury risk detected",
+        )
+class FormOptionsViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+    @patch(
+        "teams.team6.views."
+        "FitnessGoalSerializer"
+    )
+    @patch(
+        "teams.team6.views."
+        "FitnessGoal.objects.order_by"
+    )
+    def test_goals_endpoint_returns_goals(
+        self,
+        mock_order_by,
+        mock_serializer,
+    ):
+        goals = [
+            SimpleNamespace(
+                id=1,
+                name="Weight Loss",
+            )
+        ]
+
+        mock_order_by.return_value = goals
+
+        mock_serializer.return_value.data = [
+            {
+                "id": 1,
+                "name": "Weight Loss",
+                "description": "",
+            }
+        ]
+
+        request = self.factory.get("/goals")
+
+        response = FitnessGoalListView.as_view()(
+            request
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["data"]["goals"][0]["id"],
+            1,
+        )
+
+    def test_options_endpoint_returns_enums(self):
+        request = self.factory.get("/options")
+
+        response = OptionsView.as_view()(request)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["data"][
+                "fitness_levels"
+            ][0]["value"],
+            "beginner",
+        )
+
+        self.assertEqual(
+            response.data["data"][
+                "workout_types"
+            ][0]["value"],
+            "gym",
+        )
+
+    def test_equipment_endpoint_returns_options(self):
+        request = self.factory.get("/equipment")
+
+        response = EquipmentOptionsView.as_view()(
+            request
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertTrue(
+            response.data["data"]["equipment"]
+        )
+
+    def test_injury_endpoint_returns_options(self):
+        request = self.factory.get(
+            "/injury-options"
+        )
+
+        response = InjuryOptionsView.as_view()(
+            request
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertTrue(
+            response.data["data"]["body_parts"]
+        )
+
+        self.assertTrue(
+            response.data["data"]["injury_types"]
+        )
+
+        self.assertEqual(
+            response.data["data"][
+                "severities"
+            ][0]["value"],
+            "mild",
+        )
+class MembershipViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+        self.gateway_headers = {
+            "HTTP_X_USER_ID": "15",
+            "HTTP_X_USER_USERNAME": "murteza",
+        }
+
+    @patch(
+        "teams.team6.views."
+        "GroupMembershipReadSerializer"
+    )
+    @patch(
+        "teams.team6.views."
+        "get_user_memberships"
+    )
+    @patch(
+        "teams.team6.views._get_profile"
+    )
+    def test_membership_list_returns_memberships(
+        self,
+        mock_get_profile,
+        mock_get_memberships,
+        mock_read_serializer,
+    ):
+        profile = SimpleNamespace(id=3)
+
+        memberships = [
+            SimpleNamespace(id=12)
+        ]
+
+        mock_get_profile.return_value = profile
+        mock_get_memberships.return_value = (
+            memberships
+        )
+
+        mock_read_serializer.return_value.data = [
+            {
+                "id": 12,
+                "status": MembershipStatus.ACTIVE,
+                "group": {
+                    "id": 7,
+                    "name": (
+                        "Beginner Running Group"
+                    ),
+                },
+            }
+        ]
+
+        request = self.factory.get(
+            "/memberships",
+            **self.gateway_headers,
+        )
+
+        response = MembershipListCreateView\
+            .as_view()(request)
+
+        mock_get_memberships.assert_called_once_with(
+            user=profile
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["data"][
+                "memberships"
+            ][0]["id"],
+            12,
+        )
+
+    @patch(
+        "teams.team6.views."
+        "GroupMembershipReadSerializer"
+    )
+    @patch(
+        "teams.team6.views.join_group"
+    )
+    @patch(
+        "teams.team6.views."
+        "_get_training_group"
+    )
+    @patch(
+        "teams.team6.views._get_profile"
+    )
+    def test_user_can_create_membership(
+        self,
+        mock_get_profile,
+        mock_get_group,
+        mock_join_group,
+        mock_read_serializer,
+    ):
+        profile = SimpleNamespace(id=3)
+
+        group = SimpleNamespace(
+            id=7,
+            max_members=15,
+        )
+
+        membership = SimpleNamespace(
+            id=12,
+            status=MembershipStatus.ACTIVE,
+        )
+
+        mock_get_profile.return_value = profile
+        mock_get_group.return_value = group
+
+        mock_join_group.return_value = {
+            "membership": membership,
+            "risk": {
+                "score": 20,
+                "level": RiskLevel.LOW,
+            },
+        }
+
+        mock_read_serializer.return_value.data = {
+            "id": 12,
+            "status": MembershipStatus.ACTIVE,
+            "group": {
+                "id": 7,
+                "name": "Beginner Running Group",
+            },
+        }
+
+        request = self.factory.post(
+            "/memberships",
+            {
+                "group_id": 7,
+            },
+            format="json",
+            **self.gateway_headers,
+        )
+
+        response = MembershipListCreateView\
+            .as_view()(request)
+
+        mock_get_group.assert_called_once_with(7)
+
+        mock_join_group.assert_called_once_with(
+            user=profile,
+            group=group,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        self.assertEqual(
+            response.data["data"][
+                "membership"
+            ]["status"],
+            MembershipStatus.ACTIVE,
+        )
+
+    @patch(
+        "teams.team6.views._get_profile"
+    )
+    def test_membership_requires_group_id(
+        self,
+        mock_get_profile,
+    ):
+        mock_get_profile.return_value = (
+            SimpleNamespace(id=3)
+        )
+
+        request = self.factory.post(
+            "/memberships",
+            {},
+            format="json",
+            **self.gateway_headers,
+        )
+
+        response = MembershipListCreateView\
+            .as_view()(request)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertEqual(
+            response.data["error"]["code"],
+            "VALIDATION_ERROR",
+        )
+
+    @patch(
+        "teams.team6.views."
+        "GroupMembershipReadSerializer"
+    )
+    @patch(
+        "teams.team6.views.get_membership"
+    )
+    @patch(
+        "teams.team6.views._get_profile"
+    )
+    def test_membership_detail_is_returned(
+        self,
+        mock_get_profile,
+        mock_get_membership,
+        mock_read_serializer,
+    ):
+        profile = SimpleNamespace(id=3)
+        membership = SimpleNamespace(id=12)
+
+        mock_get_profile.return_value = profile
+        mock_get_membership.return_value = (
+            membership
+        )
+
+        mock_read_serializer.return_value.data = {
+            "id": 12,
+            "status": MembershipStatus.ACTIVE,
+        }
+
+        request = self.factory.get(
+            "/memberships/12",
+            **self.gateway_headers,
+        )
+
+        response = MembershipDetailView.as_view()(
+            request,
+            membership_id=12,
+        )
+
+        mock_get_membership.assert_called_once_with(
+            user=profile,
+            membership_id=12,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["data"][
+                "membership"
+            ]["id"],
+            12,
+        )
+
+    @patch(
+        "teams.team6.views."
+        "GroupMembershipReadSerializer"
+    )
+    @patch(
+        "teams.team6.views.leave_group"
+    )
+    @patch(
+        "teams.team6.views._get_profile"
+    )
+    def test_user_can_leave_membership(
+        self,
+        mock_get_profile,
+        mock_leave_group,
+        mock_read_serializer,
+    ):
+        profile = SimpleNamespace(id=3)
+
+        membership = SimpleNamespace(
+            id=12,
+            status=MembershipStatus.LEFT,
+        )
+
+        mock_get_profile.return_value = profile
+        mock_leave_group.return_value = (
+            membership
+        )
+
+        mock_read_serializer.return_value.data = {
+            "id": 12,
+            "status": MembershipStatus.LEFT,
+        }
+
+        request = self.factory.delete(
+            "/memberships/12",
+            **self.gateway_headers,
+        )
+
+        response = MembershipDetailView.as_view()(
+            request,
+            membership_id=12,
+        )
+
+        mock_leave_group.assert_called_once_with(
+            user=profile,
+            membership_id=12,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["data"][
+                "membership"
+            ]["status"],
+            MembershipStatus.LEFT,
+        )
+class AlternativeGroupViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+        self.gateway_headers = {
+            "HTTP_X_USER_ID": "15",
+            "HTTP_X_USER_USERNAME": "murteza",
+        }
+
+    @patch(
+        "teams.team6.views.recommend_groups"
+    )
+    @patch(
+        "teams.team6.views."
+        "WorkoutPreference.objects.filter"
+    )
+    @patch(
+        "teams.team6.views."
+        "_get_training_group"
+    )
+    @patch(
+        "teams.team6.views._get_profile"
+    )
+    def test_alternatives_exclude_current_group(
+        self,
+        mock_get_profile,
+        mock_get_group,
+        mock_preference_filter,
+        mock_recommend_groups,
+    ):
+        profile = SimpleNamespace(
+            id=3,
+            fitness_level=FitnessLevel.BEGINNER,
+        )
+
+        goal = SimpleNamespace(
+            id=1,
+            name="Weight Loss",
+        )
+
+        source_group = SimpleNamespace(
+            id=7,
+            goal_id=1,
+        )
+
+        alternative_group = SimpleNamespace(
+            id=8,
+            name="Alternative Running Group",
+            description="A safe alternative group",
+            goal=goal,
+            goal_id=1,
+            workout_type=WorkoutType.RUNNING,
+            difficulty_level=DifficultyLevel.EASY,
+            available_days=["saturday"],
+            equipment=["exercise_mat"],
+            start_time=time(16, 0),
+            end_time=time(18, 0),
+            max_members=15,
+        )
+
+        preference = SimpleNamespace(
+            workout_type=WorkoutType.RUNNING,
+            available_days=["saturday"],
+            equipment=["exercise_mat"],
+            preferred_start_time=time(16, 0),
+            preferred_end_time=time(18, 0),
+        )
+
+        mock_get_profile.return_value = profile
+        mock_get_group.return_value = source_group
+
+        mock_preference_filter.return_value\
+            .first.return_value = preference
+
+        mock_recommend_groups.return_value = [
+            {
+                "group": source_group,
+                "member_count": 5,
+                "match_score": 95,
+                "risk": {
+                    "score": 10,
+                    "level": RiskLevel.LOW,
+                    "recommendation": (
+                        "This group is suitable "
+                        "for the user."
+                    ),
+                },
+            },
+            {
+                "group": alternative_group,
+                "member_count": 6,
+                "match_score": 90,
+                "risk": {
+                    "score": 20,
+                    "level": RiskLevel.LOW,
+                    "recommendation": (
+                        "This group is suitable "
+                        "for the user."
+                    ),
+                },
+            },
+        ]
+
+        request = self.factory.get(
+            "/groups/7/alternatives",
+            **self.gateway_headers,
+        )
+
+        response = (
+            AlternativeGroupListView
+            .as_view()(request, group_id=7)
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        groups = response.data["data"]["groups"]
+
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["id"], 8)
+
+        mock_recommend_groups\
+            .assert_called_once_with(
+                user=profile,
+                goal_id=1,
+                fitness_level=(
+                    FitnessLevel.BEGINNER
+                ),
+                workout_type=WorkoutType.RUNNING,
+                available_days=["saturday"],
+                preferred_start_time=time(16, 0),
+                preferred_end_time=time(18, 0),
+                equipment=["exercise_mat"],
+                limit=11,
+            )
+
+    @patch(
+        "teams.team6.views."
+        "WorkoutPreference.objects.filter"
+    )
+    @patch(
+        "teams.team6.views."
+        "_get_training_group"
+    )
+    @patch(
+        "teams.team6.views._get_profile"
+    )
+    def test_alternatives_require_preference(
+        self,
+        mock_get_profile,
+        mock_get_group,
+        mock_preference_filter,
+    ):
+        mock_get_profile.return_value = (
+            SimpleNamespace(
+                id=3,
+                fitness_level=(
+                    FitnessLevel.BEGINNER
+                ),
+            )
+        )
+
+        mock_get_group.return_value = (
+            SimpleNamespace(
+                id=7,
+                goal_id=1,
+            )
+        )
+
+        mock_preference_filter.return_value\
+            .first.return_value = None
+
+        request = self.factory.get(
+            "/groups/7/alternatives",
+            **self.gateway_headers,
+        )
+
+        response = (
+            AlternativeGroupListView
+            .as_view()(request, group_id=7)
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertEqual(
+            response.data["error"]["code"],
+            "PROFILE_INCOMPLETE",
+        )
+class TrainingGroupMemberViewTests(
+    SimpleTestCase
+):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+        self.gateway_headers = {
+            "HTTP_X_USER_ID": "15",
+            "HTTP_X_USER_USERNAME": "murteza",
+        }
+
+    @patch(
+        "teams.team6.views."
+        "GroupMemberSerializer"
+    )
+    @patch(
+        "teams.team6.views."
+        "get_group_members"
+    )
+    @patch(
+        "teams.team6.views."
+        "_get_training_group"
+    )
+    def test_group_members_are_returned(
+        self,
+        mock_get_group,
+        mock_get_members,
+        mock_serializer,
+    ):
+        group = SimpleNamespace(
+            id=7,
+            name="Beginner Running Group",
+        )
+
+        memberships = [
+            SimpleNamespace(id=12)
+        ]
+
+        mock_get_group.return_value = group
+        mock_get_members.return_value = (
+            memberships
+        )
+
+        mock_serializer.return_value.data = [
+            {
+                "id": 12,
+                "profile_id": 3,
+                "core_user_id": 15,
+                "fitness_level": (
+                    FitnessLevel.BEGINNER
+                ),
+                "status": (
+                    MembershipStatus.ACTIVE
+                ),
+                "joined_at": (
+                    "2026-07-24T10:30:00Z"
+                ),
+            }
+        ]
+
+        request = self.factory.get(
+            "/groups/7/members",
+            **self.gateway_headers,
+        )
+
+        response = (
+            TrainingGroupMemberListView
+            .as_view()(request, group_id=7)
+        )
+
+        mock_get_group.assert_called_once_with(7)
+
+        mock_get_members.assert_called_once_with(
+            group=group
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["data"][
+                "member_count"
+            ],
+            1,
+        )
+
+        self.assertEqual(
+            response.data["data"][
+                "members"
+            ][0]["core_user_id"],
+            15,
         )
