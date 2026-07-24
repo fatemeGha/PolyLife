@@ -1,0 +1,11 @@
+{% extends "team5/base.html" %}
+{% load static %}
+
+{% block content %}
+<h2>علاقه مندی ها</h2>
+<div id="favorite-list" class="row"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'team5/js/favorites.js' %}"></script>
+{% endblock %}

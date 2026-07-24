@@ -1,33 +1,27 @@
-# Team team5 — Roadmap
+# Team team5 — Workout Service
 
-Your team's workspace. It's a Django app skeleton plus everything needed to run
-behind the shared gateway. Build it up step by step.
+This folder contains the Django service for team 5. It runs behind the shared
+gateway, reads the trusted `X-User-*` headers injected by the core, and serves
+both HTML pages and REST APIs.
 
-## Start (you barely touch Docker)
-1. Make sure the **core** is running (ask your TA, or run `scripts/windows/start-core.ps1`).
-2. In this folder run:  **`.\run.ps1`**  (Windows) or **`./run.sh`** (mac/Linux)
-   - it creates `.env` from `.env.example` and starts your stack.
-3. Open **http://localhost:9105**
+## Start
+1. Make sure the **core** is running.
+2. In this folder run `./run.sh` on macOS/Linux or `.
+un.ps1` on Windows.
+3. Open **http://localhost:9105**.
 
-> Out of the box only the **gateway** runs, so app routes return `502` until you
-> add your backend — that's expected. Your first job is to build the service.
+## Included
+| File | Purpose |
+|------|---------|
+| `models.py`, `serializers.py`, `views.py`, `urls.py`, `admin.py`, `tests.py` | Django app code |
+| `templates/team5/`, `static/team5/`, `migrations/` | app assets |
+| `Dockerfile` | backend image |
+| `docker-compose.yml` | gateway, backend, and database |
+| `gateway.conf` | nginx gateway config |
+| `.env.example` | local environment defaults |
 
-## What's here
-| File | What it is |
-|------|------------|
-| `models.py` `views.py` `urls.py` `admin.py` `tests.py` | your Django app |
-| `migrations/` `static/team5/` `templates/team5/` | app folders |
-| `Dockerfile` | how your backend is built (replace with your stack) |
-| `docker-compose.yml` | gateway (+ commented backend/db you enable) |
-| `gateway.conf` | authenticates `/api/` against the core, then proxies to you |
-| `.env.example` | your port, DB credentials, secret — **secrets live here, not in compose** |
+## Notes
+- The backend listens on port `8000` inside the compose network.
+- Use `DATABASE_URL` from `.env` for the team database.
+- Do not decode JWTs in this service; the gateway already authenticates the user.
 
-## Roadmap (suggested order)
-- [ ] Build your backend so it listens on port **8000** (`Dockerfile`).
-- [ ] Uncomment `backend` and `db` in `docker-compose.yml`.
-- [ ] Read `X-User-Id` / `X-User-Username` from request headers — the gateway +
-      core already authenticated the user; **never decode JWTs yourself**.
-- [ ] Use `DATABASE_URL` (from `.env`) for your own database.
-- [ ] Add models, views, urls, and tests. Build your features.
-
-> The password in `.env.example` is **dev-only**. Change it for any real use.

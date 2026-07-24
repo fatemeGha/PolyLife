@@ -1,0 +1,27 @@
+# Core Django dependencies (Synced with root requirements)
+Django==5.2.15
+django-environ==0.14.0
+PyJWT==2.13.0
+whitenoise==6.12.0
+gunicorn==26.0.0
+djangorestframework>=3.14
+
+# Celery + Redis broker
+celery>=5.3,<6.0
+redis>=5.0,<6.0
+django-celery-beat>=2.5        # Stores periodic schedules in DB
+django-celery-results>=2.5     # Optional: stores task results in DB
+
+# Timezone support for Celery scheduling
+tzdata>=2024.1
+
+# MongoDB
+mongoengine==0.28.2
+pymongo==4.7.2
+
+python-dateutil==2.9.0.post0
+firebase-admin==6.5.0
+
+# Testing only
+mongomock==4.1.2
+coverage==7.6.1

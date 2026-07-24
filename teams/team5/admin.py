@@ -1,5 +1,18 @@
-from django.contrib import admin  # noqa: F401
+from django.contrib import admin
 
-# Register your team's models here, e.g.:
-# from .models import Note
-# admin.site.register(Note)
+from .models import (
+	Exercise,
+	WorkoutProgram,
+	WorkoutExercise,
+	UserPreference,
+	Favorite,
+	WorkoutHistory,
+)
+
+
+admin.site.register(Exercise)
+admin.site.register(WorkoutProgram)
+admin.site.register(WorkoutExercise)
+admin.site.register(UserPreference)
+admin.site.register(Favorite)
+admin.site.register(WorkoutHistory)
