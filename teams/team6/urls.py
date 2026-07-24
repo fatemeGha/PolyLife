@@ -1,8 +1,12 @@
 from django.urls import path
 
 from .views import (
+    EquipmentOptionsView,
+    FitnessGoalListView,
     GroupRecommendationView,
     HealthView,
+    InjuryOptionsView,
+    OptionsView,
     ProfileView,
     RiskAnalysisView,
     TrainingGroupDetailView,
@@ -17,6 +21,26 @@ urlpatterns = [
         "health",
         HealthView.as_view(),
         name="health",
+    ),
+    path(
+        "goals",
+        FitnessGoalListView.as_view(),
+        name="goal-list",
+    ),
+    path(
+        "options",
+        OptionsView.as_view(),
+        name="options",
+    ),
+    path(
+        "equipment",
+        EquipmentOptionsView.as_view(),
+        name="equipment-options",
+    ),
+    path(
+        "injury-options",
+        InjuryOptionsView.as_view(),
+        name="injury-options",
     ),
     path(
         "profile",

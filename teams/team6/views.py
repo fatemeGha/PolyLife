@@ -31,9 +31,18 @@ from .serializers import (
     RiskAnalysisRequestSerializer,
     TrainingGroupDetailSerializer,
     TrainingGroupListSerializer,
+    FitnessGoalSerializer,
 )
 from .services.matching_service import recommend_groups
 from .services.risk_service import analyze_group_risk
+from .options import (
+    BODY_PART_OPTIONS,
+    EQUIPMENT_OPTIONS,
+    FITNESS_LEVEL_OPTIONS,
+    INJURY_SEVERITY_OPTIONS,
+    INJURY_TYPE_OPTIONS,
+    WORKOUT_TYPE_OPTIONS,
+)
 
 
 def _service_error_response(error):
@@ -670,3 +679,84 @@ class RiskAnalysisView(APIView):
 
         except Team6ServiceError as error:
             return _service_error_response(error)
+class FitnessGoalListView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        goals = FitnessGoal.objects.order_by("name")
+
+        serializer = FitnessGoalSerializer(
+            goals,
+            many=True,
+        )
+
+        return success_response(
+            message=(
+                "Fitness goals retrieved "
+                "successfully"
+            ),
+            data={
+                "goals": serializer.data,
+            },
+        )
+
+
+class OptionsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        return success_response(
+            message=(
+                "Form options retrieved "
+                "successfully"
+            ),
+            data={
+                "fitness_levels": (
+                    FITNESS_LEVEL_OPTIONS
+                ),
+                "workout_types": (
+                    WORKOUT_TYPE_OPTIONS
+                ),
+            },
+        )
+
+
+class EquipmentOptionsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        return success_response(
+            message=(
+                "Equipment options retrieved "
+                "successfully"
+            ),
+            data={
+                "equipment": EQUIPMENT_OPTIONS,
+            },
+        )
+
+
+class InjuryOptionsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        return success_response(
+            message=(
+                "Injury options retrieved "
+                "successfully"
+            ),
+            data={
+                "body_parts": BODY_PART_OPTIONS,
+                "injury_types": (
+                    INJURY_TYPE_OPTIONS
+                ),
+                "severities": (
+                    INJURY_SEVERITY_OPTIONS
+                ),
+            },
+        )
+        

@@ -16,6 +16,10 @@ from .views import (
     RiskAnalysisView,
     TrainingGroupDetailView,
     TrainingGroupListView,
+    EquipmentOptionsView,
+    FitnessGoalListView,
+    InjuryOptionsView,
+    OptionsView,
 )
 
 from .models import (
@@ -1361,4 +1365,122 @@ class TrainingGroupViewTests(SimpleTestCase):
         self.assertEqual(
             response.data["message"],
             "High injury risk detected",
+        )
+class FormOptionsViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+    @patch(
+        "teams.team6.views."
+        "FitnessGoalSerializer"
+    )
+    @patch(
+        "teams.team6.views."
+        "FitnessGoal.objects.order_by"
+    )
+    def test_goals_endpoint_returns_goals(
+        self,
+        mock_order_by,
+        mock_serializer,
+    ):
+        goals = [
+            SimpleNamespace(
+                id=1,
+                name="Weight Loss",
+            )
+        ]
+
+        mock_order_by.return_value = goals
+
+        mock_serializer.return_value.data = [
+            {
+                "id": 1,
+                "name": "Weight Loss",
+                "description": "",
+            }
+        ]
+
+        request = self.factory.get("/goals")
+
+        response = FitnessGoalListView.as_view()(
+            request
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["data"]["goals"][0]["id"],
+            1,
+        )
+
+    def test_options_endpoint_returns_enums(self):
+        request = self.factory.get("/options")
+
+        response = OptionsView.as_view()(request)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["data"][
+                "fitness_levels"
+            ][0]["value"],
+            "beginner",
+        )
+
+        self.assertEqual(
+            response.data["data"][
+                "workout_types"
+            ][0]["value"],
+            "gym",
+        )
+
+    def test_equipment_endpoint_returns_options(self):
+        request = self.factory.get("/equipment")
+
+        response = EquipmentOptionsView.as_view()(
+            request
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertTrue(
+            response.data["data"]["equipment"]
+        )
+
+    def test_injury_endpoint_returns_options(self):
+        request = self.factory.get(
+            "/injury-options"
+        )
+
+        response = InjuryOptionsView.as_view()(
+            request
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertTrue(
+            response.data["data"]["body_parts"]
+        )
+
+        self.assertTrue(
+            response.data["data"]["injury_types"]
+        )
+
+        self.assertEqual(
+            response.data["data"][
+                "severities"
+            ][0]["value"],
+            "mild",
         )
