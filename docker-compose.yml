@@ -1,22 +1,47 @@
+version: '3.8'
+
 services:
-  core:
+  gateway:
     build: .
-    container_name: polylife-core
     ports:
-      - "8000:8000"
-    # Config & secrets come from .env (copy .env.example -> .env).
-    # The start script creates it for you; never hard-code secrets here.
-    # required: false -> a missing .env falls back to settings defaults
-    # (so CI builds and `down` don't fail before .env exists).
-    env_file:
-      - path: .env
-        required: false
+      - "${TEAM_PORT:-8000}:80"
     networks:
       - polylife
-    restart: unless-stopped
+    restart: always
 
-# Shared network so each team's gateway can reach the core by name (core:8000).
-# Team stacks join this same network as `external`.
+  database:
+    image: postgres:16-alpine
+    container_name: team6_db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-team6_db}
+      POSTGRES_USER: ${POSTGRES_USER:-team6_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-team6_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - polylife
+
+  backend:
+    build:
+      context: ./teams/team6
+      dockerfile: Dockerfile
+    container_name: team6_backend
+    restart: always
+    environment:
+      - DB_HOST=database
+      - DB_NAME=${POSTGRES_DB:-team6_db}
+      - DB_USER=${POSTGRES_USER:-team6_user}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-team6_password}
+      - DB_PORT=5432
+    depends_on:
+      - database
+    networks:
+      - polylife
+
+volumes:
+  postgres_data:
+
 networks:
   polylife:
-    name: polylife_net
+    driver: bridge
