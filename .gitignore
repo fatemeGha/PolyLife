@@ -55,3 +55,9 @@ Thumbs.db
 
 # Team 8 submission documentation is kept outside the source repository
 teams/team8/docs/
+teams/team2/Summary
+teams/team2/code-doc.md
+teams/team2/RepoDoc.ps1
+teams/team2/tests/__pycache__
+teams/team2/static/team2/css/AbrilFatFace-Regular.ttf
+teams/team2/static/team2/css/Vazirmatn-VariableFont_wght.ttf
