@@ -255,11 +255,6 @@ def recommend_groups(
             group
         )
 
-    for group in groups:
-        member_count = _get_active_member_count(
-            group
-        )
-
         if member_count >= group.max_members:
             continue
 
