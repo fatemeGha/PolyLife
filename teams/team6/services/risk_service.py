@@ -234,9 +234,11 @@ def analyze_group_risk(
     user,
     group,
     persist=True,
+    additional_injuries=None,
 ):
     group_exercises = _get_group_exercises(group)
     injuries = _get_user_injuries(user)
+    injuries.extend(additional_injuries or [])
 
     if group_exercises:
         base_score = max(

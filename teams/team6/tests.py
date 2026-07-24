@@ -9,7 +9,14 @@ from django.test import SimpleTestCase
 from datetime import time
 from .services.matching_service import recommend_groups
 from rest_framework.test import APIRequestFactory
-from .views import HealthView, ProfileView
+from .views import (
+    GroupRecommendationView,
+    HealthView,
+    ProfileView,
+    RiskAnalysisView,
+    TrainingGroupDetailView,
+    TrainingGroupListView,
+)
 
 from .models import (
     FitnessLevel,
@@ -1081,3 +1088,276 @@ class ProfileViewTests(SimpleTestCase):
         )
         self.assertTrue(response.data["success"])
         self.assertEqual(response.data["data"], {})
+class TrainingGroupViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+        self.gateway_headers = {
+            "HTTP_X_USER_ID": "15",
+            "HTTP_X_USER_USERNAME": "murteza",
+        }
+
+    @patch(
+        "teams.team6.views."
+        "TrainingGroupListSerializer"
+    )
+    @patch(
+        "teams.team6.views."
+        "TrainingGroup.objects.select_related"
+    )
+    def test_group_list_returns_groups(
+        self,
+        mock_select_related,
+        mock_serializer,
+    ):
+        groups = [SimpleNamespace(id=7)]
+
+        mock_select_related.return_value\
+            .order_by.return_value = groups
+
+        mock_serializer.return_value.data = [
+            {
+                "id": 7,
+                "name": "Beginner Running Group",
+            }
+        ]
+
+        request = self.factory.get(
+            "/groups",
+            **self.gateway_headers,
+        )
+
+        response = (
+            TrainingGroupListView
+            .as_view()(request)
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            response.data["data"]["groups"][0]["id"],
+            7,
+        )
+
+    @patch(
+        "teams.team6.views.analyze_group_risk"
+    )
+    @patch(
+        "teams.team6.views."
+        "TrainingGroupDetailSerializer"
+    )
+    @patch(
+        "teams.team6.views._get_training_group"
+    )
+    @patch(
+        "teams.team6.views._get_profile"
+    )
+    def test_group_details_include_risk(
+        self,
+        mock_get_profile,
+        mock_get_group,
+        mock_serializer,
+        mock_risk,
+    ):
+        profile = SimpleNamespace(id=3)
+        group = SimpleNamespace(id=7)
+
+        mock_get_profile.return_value = profile
+        mock_get_group.return_value = group
+
+        mock_serializer.return_value.data = {
+            "id": 7,
+            "name": "Beginner Running Group",
+        }
+
+        mock_risk.return_value = {
+            "score": 20,
+            "level": RiskLevel.LOW,
+            "is_safe": True,
+            "reasons": [],
+            "recommendation": (
+                "This group is suitable for the user."
+            ),
+        }
+
+        request = self.factory.get(
+            "/groups/7",
+            **self.gateway_headers,
+        )
+
+        response = (
+            TrainingGroupDetailView
+            .as_view()(request, group_id=7)
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            response.data["data"]["group"][
+                "risk"
+            ]["score"],
+            20,
+        )
+
+    @patch(
+        "teams.team6.views.recommend_groups"
+    )
+    @patch(
+        "teams.team6.views."
+        "FitnessGoal.objects.filter"
+    )
+    @patch(
+        "teams.team6.views._get_profile"
+    )
+    def test_recommendation_returns_groups(
+        self,
+        mock_get_profile,
+        mock_goal_filter,
+        mock_recommend_groups,
+    ):
+        profile = SimpleNamespace(id=3)
+
+        goal = SimpleNamespace(
+            id=1,
+            name="Weight Loss",
+        )
+
+        group = SimpleNamespace(
+            id=7,
+            name="Beginner Running Group",
+            description="Suitable for beginners",
+            goal=goal,
+            workout_type=WorkoutType.RUNNING,
+            difficulty_level=DifficultyLevel.EASY,
+            available_days=["saturday"],
+            equipment=[],
+            start_time=time(16, 0),
+            end_time=time(18, 0),
+            max_members=15,
+        )
+
+        mock_get_profile.return_value = profile
+
+        mock_goal_filter.return_value\
+            .exists.return_value = True
+
+        mock_recommend_groups.return_value = [
+            {
+                "group": group,
+                "member_count": 5,
+                "match_score": 90,
+                "risk": {
+                    "score": 20,
+                    "level": RiskLevel.LOW,
+                    "is_safe": True,
+                    "reasons": [],
+                    "recommendation": (
+                        "This group is suitable "
+                        "for the user."
+                    ),
+                },
+            }
+        ]
+
+        request = self.factory.post(
+            "/groups/recommend",
+            {
+                "goal_id": 1,
+                "fitness_level": (
+                    FitnessLevel.BEGINNER
+                ),
+                "workout_type": (
+                    WorkoutType.RUNNING
+                ),
+                "available_days": ["saturday"],
+                "preferred_start_time": "16:00",
+                "preferred_end_time": "18:00",
+                "equipment": [],
+                "physical_limitations": [],
+            },
+            format="json",
+            **self.gateway_headers,
+        )
+
+        response = (
+            GroupRecommendationView
+            .as_view()(request)
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            response.data["data"]["groups"][0][
+                "match_score"
+            ],
+            90,
+        )
+
+    @patch(
+        "teams.team6.views.analyze_group_risk"
+    )
+    @patch(
+        "teams.team6.views._get_training_group"
+    )
+    @patch(
+        "teams.team6.views._get_profile"
+    )
+    def test_risk_analysis_returns_result(
+        self,
+        mock_get_profile,
+        mock_get_group,
+        mock_analyze_risk,
+    ):
+        mock_get_profile.return_value = (
+            SimpleNamespace(id=3)
+        )
+
+        mock_get_group.return_value = (
+            SimpleNamespace(id=7)
+        )
+
+        mock_analyze_risk.return_value = {
+            "group_id": 7,
+            "score": 85,
+            "level": RiskLevel.HIGH,
+            "is_safe": False,
+            "reasons": [],
+            "recommendation": (
+                "Joining this group is not "
+                "recommended."
+            ),
+        }
+
+        request = self.factory.post(
+            "/risk-analysis",
+            {
+                "group_id": 7,
+            },
+            format="json",
+            **self.gateway_headers,
+        )
+
+        response = RiskAnalysisView.as_view()(
+            request
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            response.data["data"]["analysis"][
+                "level"
+            ],
+            RiskLevel.HIGH,
+        )
+        self.assertEqual(
+            response.data["message"],
+            "High injury risk detected",
+        )
