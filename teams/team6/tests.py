@@ -461,7 +461,7 @@ class RiskServiceTests(SimpleTestCase):
         )
 
         mock_create.assert_called_once_with(
-            user=user,
+            user_profile=user,
             group=group,
             risk_level=RiskLevel.LOW,
             score=10,
@@ -736,7 +736,7 @@ class MembershipServiceTests(SimpleTestCase):
             )
 
         mock_create.assert_called_once_with(
-            user=user,
+            user_profile=user,
             group=group,
             status=MembershipStatus.ACTIVE,
         )
@@ -745,6 +745,7 @@ class MembershipServiceTests(SimpleTestCase):
             result["membership"],
             membership,
         )
+
         self.assertEqual(
             result["risk"],
             safe_risk,

@@ -170,13 +170,13 @@ def _replace_goals(*, profile, goal_ids):
     )
 
     UserGoal.objects.filter(
-        user=profile,
+        user_profile=profile,
     ).delete()
 
     UserGoal.objects.bulk_create(
         [
             UserGoal(
-                user=profile,
+                user_profile=profile,
                 goal=goals_by_id[goal_id],
             )
             for goal_id in goal_ids
@@ -190,7 +190,7 @@ def _save_workout_preference(
     preference_data,
 ):
     WorkoutPreference.objects.update_or_create(
-        user=profile,
+        user_profile=profile,
         defaults=preference_data,
     )
 
@@ -201,7 +201,7 @@ def _replace_injury_history(
     injuries,
 ):
     InjuryHistory.objects.filter(
-        user=profile,
+        user_profile=profile,
     ).delete()
 
     InjuryHistory.objects.bulk_create(
