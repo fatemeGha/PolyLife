@@ -5,24 +5,127 @@ on:
   pull_request:
 
 jobs:
+  # ------------------------------------------------------------------
+  # Core tests
+  # ------------------------------------------------------------------
   test:
     name: Core tests
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+          cache-dependency-path: requirements.txt
+
+      - name: Install core dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install -r teams/team2/requirements.txt
+
       - name: Run core tests
         run: python manage.py test core
 
+  # ------------------------------------------------------------------
+  # Core Docker image
+  # ------------------------------------------------------------------
   docker-build:
     name: Docker image builds
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Build the core image (frontend + backend)
-        run: docker compose build
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build the core image
+        run: docker compose -f docker-compose.yml build
+
+  # ------------------------------------------------------------------
+  # Team2 tests
+  # ------------------------------------------------------------------
+  team2-tests:
+    name: Team2 unit and API tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      COMPOSE_FILE: teams/team2/docker-compose.yml
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: teams/team2/requirements.txt
+
+      - name: Install Team2 dependencies
+        run: python -m pip install -r teams/team2/requirements.txt
+
+      - name: Prepare Team2 environment
+        run: |
+          cp teams/team2/.env.example .env
+
+          docker network inspect polylife_net >/dev/null 2>&1 \
+            || docker network create polylife_net
+
+      - name: Build and start Team2 services
+        run: |
+          docker compose --env-file .env -f "$COMPOSE_FILE" \
+            up -d --build db team2_redis team2_backend
+
+      - name: Wait for Team2 API
+        run: |
+          for attempt in {1..60}; do
+            if curl --silent --show-error --fail \
+              http://127.0.0.1:8002/api/team2/health/ >/dev/null; then
+              echo "Team2 API is ready."
+              exit 0
+            fi
+
+            echo "Waiting for Team2 API ($attempt/60)..."
+            sleep 2
+          done
+
+          echo "Team2 API did not become ready."
+
+          docker compose --env-file .env -f "$COMPOSE_FILE" \
+            logs --no-color --tail=200 team2_backend
+
+          exit 1
+
+      - name: Run Team2 unit tests
+        run: |
+          docker compose --env-file .env -f "$COMPOSE_FILE" exec -T \
+            team2_backend \
+            python -m unittest discover \
+            -s teams/team2/tests \
+            -t . \
+            -p "test_*.py" \
+            -v
+
+      - name: Run Team2 API integration tests
+        env:
+          TEAM2_API_BASE_URL: http://127.0.0.1:8002/api/team2
+        run: |
+          python teams/team2/tests/api_integration_test.py -v
+
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          docker compose --env-file .env -f "$COMPOSE_FILE" \
+            logs --no-color --tail=300
+
+      - name: Stop Team2 services
+        if: always()
+        run: |
+          docker compose --env-file .env -f "$COMPOSE_FILE" \
+            down -v --remove-orphans
